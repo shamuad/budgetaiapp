@@ -1,0 +1,12 @@
+{
+  "name": "@budgetaiapp/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.112.3",
+    "expo-localization": "~57.0.1",
+    "i18n-js": "^4.5.3"
+  }
+}

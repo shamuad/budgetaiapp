@@ -1,0 +1,17 @@
+# BudgetAIapp Project Rules
+
+1. ARCHITECTURE
+- Utilize a Monorepo structure (apps/mobile, apps/web).
+- Only modify the explicitly requested folder/file.
+- Never over-engineer; always provide the simplest, clearest, and cleanest code solution.
+- Design shared components (DRY) to be highly reusable across the app.
+
+2. TECHNOLOGY STACK
+- Frontend: React Native (Expo), TypeScript.
+- Navigation: Expo Router (Tabs and Stack architecture).
+- Icons: Lucide Icons.
+- Backend/Database: Supabase.
+
+3. LANGUAGE AND DATA MANAGEMENT
+- Database tables, columns, and variable naming conventions must be strictly in English.
+- Implement a robust multi-language (i18n) supported architecture.
