@@ -1,96 +1,108 @@
-import { ArrowDownLeft, ArrowUpRight, Bitcoin, TrendingUp } from 'lucide-react-native';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import {
+  formatAssetLabel,
+  formatDate,
+  formatMoney,
+  i18n,
+  TransactionRow,
+} from '@budgetaiapp/shared';
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
-import { i18n } from '@budgetaiapp/shared';
-
+import AddTransactionModal from '../../src/components/AddTransactionModal';
 import TransactionItem from '../../src/components/TransactionItem';
-
-const assets = [
-  { id: 'voo', name: 'S&P 500 ETF', holding: '12 VOO', value: '$5,842.30' },
-  { id: 'btc', name: 'Bitcoin', holding: '0.15 BTC', value: '$6,120.00' },
-  { id: 'aapl', name: 'Apple Inc.', holding: '8 AAPL', value: '$1,704.00' },
-];
-
-const activities = [
-  { id: 'a1', type: 'deposit', date: '2026-08-12', amount: '+$500.00' },
-  { id: 'a2', type: 'deposit', date: '2026-08-05', amount: '+$1,200.00' },
-  { id: 'a3', type: 'withdrawal', date: '2026-07-28', amount: '-$300.00' },
-] as const;
-
-type Activity = (typeof activities)[number];
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short' });
-}
-
-function renderActivity({ item }: { item: Activity }) {
-  const isDeposit = item.type === 'deposit';
-
-  return (
-    <TransactionItem
-      icon={
-        isDeposit ? (
-          <ArrowDownLeft color="#059669" size={20} />
-        ) : (
-          <ArrowUpRight color="#DC2626" size={20} />
-        )
-      }
-      title={i18n.t(`transactions.${item.type}`)}
-      subtitle={formatDate(item.date)}
-      amount={item.amount}
-      positive={isDeposit}
-    />
-  );
-}
+import { useTransactions } from '../../src/context/TransactionsContext';
+import { colors, spacing } from '../../src/theme';
 
 export default function TransactionsScreen() {
+  const { transactions, isLoading, error, refetch, remove } = useTransactions();
+  const [editingTransaction, setEditingTransaction] = useState<TransactionRow | null>(null);
+
+  function renderTransaction({ item }: { item: TransactionRow }) {
+    const isIncome = item.type === 'income';
+
+    return (
+      <TransactionItem
+        icon={
+          isIncome ? (
+            <ArrowDownLeft color={colors.income} size={20} />
+          ) : (
+            <ArrowUpRight color={colors.expense} size={20} />
+          )
+        }
+        title={item.title}
+        subtitle={formatDate(item.date, 'short')}
+        meta={formatAssetLabel(item.asset)}
+        amount={`${isIncome ? '+' : '-'}${formatMoney(item.amount, item.currency)}`}
+        positive={isIncome}
+        onEdit={() => setEditingTransaction(item)}
+        onDelete={() => remove(item.id)}
+      />
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="small" color={colors.brand} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.error}>{error}</Text>
+      </View>
+    );
+  }
+
   return (
-    <FlatList
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      data={activities}
-      keyExtractor={(item) => item.id}
-      renderItem={renderActivity}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.sectionTitle}>{i18n.t('transactions.portfolio')}</Text>
-          {assets.map((asset) => (
-            <TransactionItem
-              key={asset.id}
-              icon={
-                asset.id === 'btc' ? (
-                  <Bitcoin color="#4F46E5" size={20} />
-                ) : (
-                  <TrendingUp color="#4F46E5" size={20} />
-                )
-              }
-              title={asset.name}
-              subtitle={asset.holding}
-              amount={asset.value}
-            />
-          ))}
-          <Text style={styles.sectionTitle}>{i18n.t('transactions.recentActivity')}</Text>
-        </View>
-      }
-    />
+    <View style={styles.screen}>
+      <FlatList
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        data={transactions}
+        keyExtractor={(item) => item.id}
+        renderItem={renderTransaction}
+        ListEmptyComponent={
+          <Text style={styles.empty}>{i18n.t('dashboard.emptyTransactions')}</Text>
+        }
+      />
+
+      <AddTransactionModal
+        visible={editingTransaction !== null}
+        onClose={() => setEditingTransaction(null)}
+        onSuccess={refetch}
+        transactionToEdit={editingTransaction}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
-  header: {
-    gap: 12,
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  empty: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xl,
+  },
+  error: {
+    fontSize: 14,
+    color: colors.danger,
   },
 });
