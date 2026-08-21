@@ -28,7 +28,6 @@ import {
   Folder,
   Mic,
   Sparkles,
-  Square,
   Type,
   Wallet,
 } from 'lucide-react-native';
@@ -246,7 +245,8 @@ export default function AddTransactionModal({
   const {
     isRecording,
     isProcessing,
-    toggle: toggleRecording,
+    start: startRecording,
+    stop: stopRecording,
     cancel: cancelRecording,
   } = useVoiceRecorder({
     onFinish: async ({ base64, mimeType }) => {
@@ -832,19 +832,16 @@ export default function AddTransactionModal({
 
               <View style={styles.aiActions}>
                 <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={toggleRecording}
+                  activeOpacity={1}
+                  onPressIn={startRecording}
+                  onPressOut={stopRecording}
                   disabled={isAIBusy}
                   style={[
                     styles.aiMic,
                     isRecording && styles.aiMicActive,
                     isAIBusy && styles.aiActionDisabled,
                   ]}>
-                  {isRecording ? (
-                    <Square color={colors.onBrand} size={16} fill={colors.onBrand} />
-                  ) : (
-                    <Mic color={colors.onBrand} size={20} />
-                  )}
+                  <Mic color={colors.onBrand} size={20} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1159,9 +1156,12 @@ const styles = StyleSheet.create({
     minHeight: TOUCH_TARGET,
     borderRadius: radius.md,
     backgroundColor: colors.brandDark,
+    opacity: 0.9,
   },
   aiMicActive: {
     backgroundColor: colors.danger,
+    opacity: 1,
+    transform: [{ scale: 1.08 }],
   },
   aiAction: {
     flex: 1,
