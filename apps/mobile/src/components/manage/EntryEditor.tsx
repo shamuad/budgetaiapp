@@ -52,19 +52,25 @@ export default function EntryEditor<T extends string>({
   onCancel,
 }: EntryEditorProps<T>) {
   const [name, setName] = useState(initial.name);
-  // Tapped from a fixed set, so this is never empty and needs no validation.
   const [icon, setIcon] = useState(initial.icon || iconChoices[0]);
   const [type, setType] = useState<T>(initial.type);
 
   const handleSave = () => {
     const trimmedName = name.trim();
+    const trimmedIcon = icon.trim();
 
     if (!trimmedName) {
       Alert.alert(i18n.t('common.errorTitle'), i18n.t('manage.missingName'));
       return;
     }
 
-    onSave({ name: trimmedName, icon, type });
+    // Reachable only by clearing the field, since every row starts with an icon.
+    if (!trimmedIcon) {
+      Alert.alert(i18n.t('common.errorTitle'), i18n.t('manage.missingIcon'));
+      return;
+    }
+
+    onSave({ name: trimmedName, icon: trimmedIcon, type });
   };
 
   return (
@@ -92,9 +98,20 @@ export default function EntryEditor<T extends string>({
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.iconPreview}>
-            <Text style={styles.iconPreviewText}>{icon}</Text>
-          </View>
+          {/* A plain input, so the system keyboard's emoji panel offers everything
+              the phone has rather than only the shortcuts below. */}
+          <TextInput
+            value={icon}
+            onChangeText={setIcon}
+            style={styles.iconInput}
+            textAlign="center"
+            placeholder="🙂"
+            placeholderTextColor={colors.placeholderFaint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+          />
+          <Text style={styles.iconHint}>{i18n.t('manage.iconHint')}</Text>
 
           <View style={styles.iconGrid}>
             {iconChoices.map((choice) => (
@@ -179,18 +196,20 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.lg,
   },
-  iconPreview: {
+  iconInput: {
     alignSelf: 'center',
     width: 88,
     height: 88,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontSize: 40,
+    lineHeight: 48,
     backgroundColor: colors.surface,
     borderRadius: 44,
   },
-  iconPreviewText: {
-    fontSize: 40,
-    lineHeight: 48,
+  iconHint: {
+    marginTop: -spacing.sm,
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   iconGrid: {
     flexDirection: 'row',
