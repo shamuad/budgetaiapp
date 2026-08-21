@@ -2,16 +2,16 @@ import {
   AssetInput,
   AssetType,
   countAssetTransactions,
-  createAsset,
   DEFAULT_CURRENCY,
-  deleteAsset,
   i18n,
-  updateAsset,
+  useAssets,
+  useCreateAssetMutation,
+  useDeleteAssetMutation,
+  useTransactionsQuery,
+  useUpdateAssetMutation,
 } from '@budgetaiapp/shared';
 import { Alert } from 'react-native';
 
-import { useAssets } from '../../context/AssetsContext';
-import { useTransactions } from '../../context/TransactionsContext';
 import { accountTypeLabel, accountTypeOptions } from '../../lib/labels';
 import { EntryDraft } from './EntryEditor';
 import ManageEntriesModal, { ManageEntry } from './ManageEntriesModal';
@@ -30,8 +30,11 @@ export default function ManageAccountsModal({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { assets, refresh } = useAssets();
-  const { transactions, refetch } = useTransactions();
+  const { assets } = useAssets();
+  const { transactions } = useTransactionsQuery();
+  const createAssetMutation = useCreateAssetMutation();
+  const updateAssetMutation = useUpdateAssetMutation();
+  const deleteAssetMutation = useDeleteAssetMutation();
 
   const entries: ManageEntry<AssetType>[] = assets.map((asset) => {
     const used = transactions.filter((row) => row.asset_id === asset.id).length;
@@ -45,11 +48,6 @@ export default function ManageAccountsModal({
       subtitle: `${accountTypeLabel(type)} · ${i18n.t('manage.usage', { count: used })}`,
     };
   });
-
-  /** Reloads the accounts and the rows that embed their names. */
-  const syncEverywhere = async () => {
-    await Promise.all([refresh(), refetch()]);
-  };
 
   const toInput = (draft: EntryDraft<AssetType>, id: string | null): AssetInput => {
     const existing = assets.find((asset) => asset.id === id);
@@ -75,12 +73,10 @@ export default function ManageAccountsModal({
       createTitle={i18n.t('manage.newAccount')}
       editTitle={i18n.t('manage.editAccount')}
       onCreate={async (draft) => {
-        await createAsset(toInput(draft, null));
-        await syncEverywhere();
+        await createAssetMutation.mutateAsync(toInput(draft, null));
       }}
       onUpdate={async (id, draft) => {
-        await updateAsset(id, toInput(draft, id));
-        await syncEverywhere();
+        await updateAssetMutation.mutateAsync({ id, input: toInput(draft, id) });
       }}
       onDelete={async (entry) => {
         // `transactions.asset_id` is NOT NULL, so the database would reject this
@@ -96,8 +92,7 @@ export default function ManageAccountsModal({
           return false;
         }
 
-        await deleteAsset(entry.id);
-        await syncEverywhere();
+        await deleteAssetMutation.mutateAsync(entry.id);
 
         return true;
       }}

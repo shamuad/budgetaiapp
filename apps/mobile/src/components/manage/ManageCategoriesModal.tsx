@@ -1,16 +1,16 @@
 import {
   CategoryInput,
   countCategoryTransactions,
-  createCategory,
-  deleteCategory,
   i18n,
   TransactionType,
-  updateCategory,
+  useCategories,
+  useCreateCategoryMutation,
+  useDeleteCategoryMutation,
+  useTransactionsQuery,
+  useUpdateCategoryMutation,
 } from '@budgetaiapp/shared';
 import { Alert } from 'react-native';
 
-import { useCategories } from '../../context/CategoriesContext';
-import { useTransactions } from '../../context/TransactionsContext';
 import { transactionTypeOptions } from '../../lib/labels';
 import { EntryDraft } from './EntryEditor';
 import ManageEntriesModal, { ManageEntry } from './ManageEntriesModal';
@@ -29,8 +29,11 @@ export default function ManageCategoriesModal({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { categories, refresh } = useCategories();
-  const { transactions, refetch } = useTransactions();
+  const { categories } = useCategories();
+  const { transactions } = useTransactionsQuery();
+  const createCategoryMutation = useCreateCategoryMutation();
+  const updateCategoryMutation = useUpdateCategoryMutation();
+  const deleteCategoryMutation = useDeleteCategoryMutation();
 
   const entries: ManageEntry<TransactionType>[] = categories.map((category) => ({
     id: category.id,
@@ -41,11 +44,6 @@ export default function ManageCategoriesModal({
       count: transactions.filter((row) => row.category_id === category.id).length,
     }),
   }));
-
-  /** Reloads the categories and the rows that embed their names. */
-  const syncEverywhere = async () => {
-    await Promise.all([refresh(), refetch()]);
-  };
 
   const toInput = (draft: EntryDraft<TransactionType>): CategoryInput => ({
     name: draft.name,
@@ -65,12 +63,10 @@ export default function ManageCategoriesModal({
       createTitle={i18n.t('manage.newCategory')}
       editTitle={i18n.t('manage.editCategory')}
       onCreate={async (draft) => {
-        await createCategory(toInput(draft));
-        await syncEverywhere();
+        await createCategoryMutation.mutateAsync(toInput(draft));
       }}
       onUpdate={async (id, draft) => {
-        await updateCategory(id, toInput(draft));
-        await syncEverywhere();
+        await updateCategoryMutation.mutateAsync({ id, input: toInput(draft) });
       }}
       onDelete={async (entry) => {
         // `transactions.category_id` is nullable, so a delete would quietly strip
@@ -86,8 +82,7 @@ export default function ManageCategoriesModal({
           return false;
         }
 
-        await deleteCategory(entry.id);
-        await syncEverywhere();
+        await deleteCategoryMutation.mutateAsync(entry.id);
 
         return true;
       }}

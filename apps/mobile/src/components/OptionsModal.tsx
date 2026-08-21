@@ -1,10 +1,9 @@
-import { deleteAllTransactions, i18n } from '@budgetaiapp/shared';
+import { i18n, useDeleteAllTransactionsMutation, useTransactionsQuery } from '@budgetaiapp/shared';
 import { ChevronRight, Folder, Trash2, Wallet } from 'lucide-react-native';
 import { ReactNode, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { useTransactions } from '../context/TransactionsContext';
 import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
 import ManageAccountsModal from './manage/ManageAccountsModal';
 import ManageCategoriesModal from './manage/ManageCategoriesModal';
@@ -20,7 +19,8 @@ type OptionsModalProps = {
  * only one modal is ever presented at a time and closing one steps back here.
  */
 export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
-  const { transactions, refetch } = useTransactions();
+  const { transactions } = useTransactionsQuery();
+  const clearDataMutation = useDeleteAllTransactionsMutation();
   const [destination, setDestination] = useState<'accounts' | 'categories' | null>(null);
 
   const count = transactions.length;
@@ -39,9 +39,7 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteAllTransactions();
-            await refetch();
-            // Step back so the emptied dashboard is visible straight away.
+            await clearDataMutation.mutateAsync();
             close();
           } catch (error) {
             Alert.alert(i18n.t('common.errorTitle'), (error as Error).message);

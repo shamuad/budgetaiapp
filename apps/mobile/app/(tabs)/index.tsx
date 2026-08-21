@@ -7,11 +7,15 @@ import {
   i18n,
   toBaseAmount,
   TransactionRow,
+  useAppStore,
+  useAssets,
+  useTransactions,
 } from '@budgetaiapp/shared';
 import { ArrowDownLeft, ArrowUpRight, Plus, Settings } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Pressable,
   ScrollView,
@@ -23,8 +27,6 @@ import {
 import AddTransactionModal from '../../src/components/AddTransactionModal';
 import OptionsModal from '../../src/components/OptionsModal';
 import TransactionItem from '../../src/components/TransactionItem';
-import { useAssets } from '../../src/context/AssetsContext';
-import { useTransactions } from '../../src/context/TransactionsContext';
 import { accountTone, colors, radius, spacing } from '../../src/theme';
 
 /** The dashboard is a summary, so the full history stays on the transactions tab. */
@@ -108,13 +110,17 @@ function AccountCard({ asset, balance, isFocused, isDimmed, onPress }: AccountCa
 }
 
 export default function DashboardScreen() {
-  const { transactions, totalBalance, isLoading, error, refetch, remove } = useTransactions();
+  const { transactions, totalBalance, isLoading, error, remove } = useTransactions({
+    onDeleteError: (err) => {
+      Alert.alert(i18n.t('common.errorTitle'), err.message || i18n.t('transactionActions.deleteError'));
+    },
+  });
   const { assets } = useAssets();
+  const selectedAssetId = useAppStore((state) => state.selectedAssetId);
+  const toggleSelectedAsset = useAppStore((state) => state.toggleSelectedAsset);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isOptionsVisible, setIsOptionsVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<TransactionRow | null>(null);
-  // Null means "all accounts". Purely a view filter over data already in memory.
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const heroFade = useRef(new Animated.Value(1)).current;
 
   // Fades the headline back in whenever focus moves, so the figure swaps softly
@@ -161,7 +167,7 @@ export default function DashboardScreen() {
     : totalBalance;
 
   function toggleAsset(assetId: string) {
-    setSelectedAssetId((current) => (current === assetId ? null : assetId));
+    toggleSelectedAsset(assetId);
   }
 
   function openEditor(transaction: TransactionRow) {
@@ -274,7 +280,6 @@ export default function DashboardScreen() {
       <AddTransactionModal
         visible={isModalVisible}
         onClose={closeModal}
-        onSuccess={refetch}
         transactionToEdit={editingTransaction}
       />
 

@@ -1,7 +1,6 @@
 import {
   Asset,
   Category,
-  createTransaction,
   CurrencyCode,
   DEFAULT_CURRENCY,
   formatAmountForInput,
@@ -16,7 +15,10 @@ import {
   TransactionInput,
   TransactionRow,
   TransactionType,
-  updateTransaction,
+  useAssets,
+  useCategories,
+  useCreateTransactionMutation,
+  useUpdateTransactionMutation,
 } from '@budgetaiapp/shared';
 import DateTimePicker, { DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { Part } from '@google/generative-ai';
@@ -47,8 +49,6 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAssets } from '../context/AssetsContext';
-import { useCategories } from '../context/CategoriesContext';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import {
   askGemini,
@@ -106,7 +106,6 @@ type ValidationResult =
 type AddTransactionModalProps = {
   visible: boolean;
   onClose: () => void;
-  onSuccess: () => void | Promise<void>;
   /** Supplying a row switches the modal into edit mode. */
   transactionToEdit?: TransactionRow | null;
 };
@@ -210,7 +209,6 @@ function CategoryPicker({
 export default function AddTransactionModal({
   visible,
   onClose,
-  onSuccess,
   transactionToEdit = null,
 }: AddTransactionModalProps) {
   const [title, setTitle] = useState('');
@@ -242,6 +240,8 @@ export default function AddTransactionModal({
 
   const { categories } = useCategories();
   const { assets } = useAssets();
+  const createTransactionMutation = useCreateTransactionMutation();
+  const updateTransactionMutation = useUpdateTransactionMutation();
   const {
     isRecording,
     isProcessing,
@@ -531,12 +531,11 @@ export default function AddTransactionModal({
       };
 
       if (transactionToEdit) {
-        await updateTransaction(transactionToEdit.id, input);
+        await updateTransactionMutation.mutateAsync({ id: transactionToEdit.id, input });
       } else {
-        await createTransaction(input);
+        await createTransactionMutation.mutateAsync(input);
       }
 
-      await onSuccess();
       onClose();
     } catch (error) {
       const message =

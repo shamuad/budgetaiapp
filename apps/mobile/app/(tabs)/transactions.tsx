@@ -4,18 +4,22 @@ import {
   formatMoney,
   i18n,
   TransactionRow,
+  useTransactions,
 } from '@budgetaiapp/shared';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import AddTransactionModal from '../../src/components/AddTransactionModal';
 import TransactionItem from '../../src/components/TransactionItem';
-import { useTransactions } from '../../src/context/TransactionsContext';
 import { colors, spacing } from '../../src/theme';
 
 export default function TransactionsScreen() {
-  const { transactions, isLoading, error, refetch, remove } = useTransactions();
+  const { transactions, isLoading, error, remove } = useTransactions({
+    onDeleteError: (err) => {
+      Alert.alert(i18n.t('common.errorTitle'), err.message || i18n.t('transactionActions.deleteError'));
+    },
+  });
   const [editingTransaction, setEditingTransaction] = useState<TransactionRow | null>(null);
 
   function renderTransaction({ item }: { item: TransactionRow }) {
@@ -73,7 +77,6 @@ export default function TransactionsScreen() {
       <AddTransactionModal
         visible={editingTransaction !== null}
         onClose={() => setEditingTransaction(null)}
-        onSuccess={refetch}
         transactionToEdit={editingTransaction}
       />
     </View>
