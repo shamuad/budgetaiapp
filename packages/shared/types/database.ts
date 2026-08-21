@@ -1,12 +1,16 @@
 export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'TRY';
 
+// User base currency. Transaction amounts stay in their original currency;
+// `exchange_rate` converts them into this one for balances and reports.
+export const DEFAULT_CURRENCY: CurrencyCode = 'EUR';
+
 export type TransactionType = 'income' | 'expense';
 
-export type AssetType = 'stock' | 'etf' | 'crypto' | 'cash' | 'commodity';
+// Investment holdings and spending accounts share the `assets` table.
+export type AssetType = 'stock' | 'etf' | 'crypto' | 'commodity' | 'cash' | 'card' | 'bank';
 
 export interface Category {
   id: string;
-  user_id: string;
   name: string;
   type: TransactionType;
   icon: string | null;
@@ -15,28 +19,33 @@ export interface Category {
 
 export interface Transaction {
   id: string;
-  user_id: string;
-  category_id: string | null;
-  type: TransactionType;
-  description: string | null;
+  title: string;
   amount: number;
+  // Original purchase currency. Never rewritten when live rates move.
   currency: CurrencyCode;
-  // Rate to the user's base currency, stored as of occurred_at so past
-  // records keep their original value when rates change.
+  // Multiplier into the user base currency at the time of purchase.
+  // base_amount = amount * exchange_rate. Same-currency rows use 1.
   exchange_rate: number;
-  occurred_at: string;
+  type: TransactionType;
+  category_id: string | null;
+  // The account the money moved through. Required, enforced by a NOT NULL column.
+  asset_id: string;
+  // Calendar day as YYYY-MM-DD, without a time or timezone.
+  date: string;
+  notes: string | null;
   created_at: string;
 }
 
 export interface Asset {
   id: string;
-  user_id: string;
   name: string;
   symbol: string;
-  type: AssetType;
+  type: AssetType | null;
+  icon: string | null;
+  // Priced columns describe investment holdings and stay at zero for accounts.
   quantity: number;
-  average_cost: number;
+  purchase_price: number;
+  current_price: number | null;
   currency: CurrencyCode;
   created_at: string;
-  updated_at: string;
 }

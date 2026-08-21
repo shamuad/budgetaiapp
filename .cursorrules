@@ -1,10 +1,11 @@
 # BudgetAIapp Project Rules
 
-1. ARCHITECTURE
+1. ARCHITECTURE & WORKFLOW
 - Utilize a Monorepo structure (apps/mobile, apps/web).
 - Only modify the explicitly requested folder/file.
 - Never over-engineer; always provide the simplest, clearest, and cleanest code solution.
 - Design shared components (DRY) to be highly reusable across the app.
+- CRITICAL: Never remove existing features or simplify working logic during a refactor unless explicitly instructed.
 
 2. TECHNOLOGY STACK
 - Frontend: React Native (Expo), TypeScript.
@@ -12,6 +13,16 @@
 - Icons: Lucide Icons.
 - Backend/Database: Supabase.
 
-3. LANGUAGE AND DATA MANAGEMENT
+3. DATA & BUSINESS LOGIC (CRITICAL)
 - Database tables, columns, and variable naming conventions must be strictly in English.
+- Do NOT add `.limit()` to Supabase queries unless explicitly asked.
+- Always maintain secondary sorting (e.g., sort by `date` DESC, then by `created_at` DESC) to prevent timeline bugs.
+- Financial data must strictly adhere to the Multi-Currency and Asset structure (always link to `assets` table and use fixed `exchange_rate`).
+
+4. UI & DESIGN INTEGRITY
+- Never replace database-driven UI elements (like category emojis/icons) with generic placeholders (e.g., simple arrows).
+- Strictly follow a premium, minimalist, iOS-like SaaS design language (generous spacing, SafeAreaView respect, clean typography).
+
+5. CORE FEATURES
+- The Gemini AI / Vision parsing logic is the core product value. Never alter, mock, or simplify this integration.
 - Implement a robust multi-language (i18n) supported architecture.
