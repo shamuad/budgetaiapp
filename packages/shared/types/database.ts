@@ -42,6 +42,10 @@ export interface Asset {
   symbol: string;
   type: AssetType | null;
   icon: string | null;
+  /** User override for wallet card background. Null uses auto-detected bank color. */
+  custom_color: string | null;
+  /** Manual list order in manage accounts and dashboard cards. */
+  sort_order: number | null;
   // Priced columns describe investment holdings and stay at zero for accounts.
   quantity: number;
   purchase_price: number;

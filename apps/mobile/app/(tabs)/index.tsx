@@ -1,5 +1,4 @@
 import {
-  Asset,
   DEFAULT_CURRENCY,
   formatAssetLabel,
   formatDate,
@@ -25,9 +24,10 @@ import {
 } from 'react-native';
 
 import AddTransactionModal from '../../src/components/AddTransactionModal';
+import AccountCard from '../../src/components/AccountCard';
 import OptionsModal from '../../src/components/OptionsModal';
 import TransactionItem from '../../src/components/TransactionItem';
-import { accountTone, colors, radius, spacing } from '../../src/theme';
+import { colors, radius, spacing } from '../../src/theme';
 
 /** The dashboard is a summary, so the full history stays on the transactions tab. */
 const RECENT_LIMIT = 5;
@@ -42,70 +42,6 @@ function TransactionIcon({ transaction }: { transaction: TransactionRow }) {
     <ArrowDownLeft color={colors.income} size={20} />
   ) : (
     <ArrowUpRight color={colors.expense} size={20} />
-  );
-}
-
-function toneFor(type: Asset['type']) {
-  return type && type in accountTone
-    ? accountTone[type as keyof typeof accountTone]
-    : accountTone.default;
-}
-
-type AccountCardProps = {
-  asset: Asset;
-  balance: number;
-  isFocused: boolean;
-  isDimmed: boolean;
-  onPress: () => void;
-};
-
-function AccountCard({ asset, balance, isFocused, isDimmed, onPress }: AccountCardProps) {
-  // One driver for both cues: -1 pushed back, 0 resting, 1 focused.
-  const emphasis = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.spring(emphasis, {
-      toValue: isFocused ? 1 : isDimmed ? -1 : 0,
-      friction: 8,
-      tension: 80,
-      useNativeDriver: true,
-    }).start();
-  }, [emphasis, isDimmed, isFocused]);
-
-  // Clamped so the spring's overshoot cannot push opacity past 1.
-  const scale = emphasis.interpolate({
-    inputRange: [-1, 0, 1],
-    outputRange: [0.96, 1, 1.03],
-    extrapolate: 'clamp',
-  });
-  const opacity = emphasis.interpolate({
-    inputRange: [-1, 0, 1],
-    outputRange: [0.45, 1, 1],
-    extrapolate: 'clamp',
-  });
-
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button">
-      <Animated.View
-        style={[
-          styles.accountCard,
-          { backgroundColor: toneFor(asset.type) },
-          isFocused && styles.accountCardFocused,
-          { opacity, transform: [{ scale }] },
-        ]}>
-        {/* Off-canvas highlight that gives the card a moulded, physical finish. */}
-        <View style={styles.accountSheen} />
-        <Text style={styles.accountIcon}>{asset.icon}</Text>
-        <View>
-          <Text style={styles.accountName} numberOfLines={1}>
-            {asset.name}
-          </Text>
-          <Text style={styles.accountBalance} numberOfLines={1}>
-            {formatMoney(balance, DEFAULT_CURRENCY)}
-          </Text>
-        </View>
-      </Animated.View>
-    </Pressable>
   );
 }
 
@@ -352,50 +288,6 @@ const styles = StyleSheet.create({
     // Room for the focused card to scale up without being clipped.
     paddingVertical: spacing.xs,
     gap: spacing.md,
-  },
-  accountCard: {
-    width: 168,
-    height: 112,
-    borderRadius: 20,
-    padding: spacing.lg,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    // Always reserved so switching the colour on focus cannot shift the layout.
-    borderWidth: 2,
-    borderColor: 'transparent',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  accountCardFocused: {
-    borderColor: 'rgba(255, 255, 255, 0.85)',
-    shadowOpacity: 0.24,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  accountSheen: {
-    position: 'absolute',
-    top: -34,
-    right: -26,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  accountIcon: {
-    fontSize: 22,
-  },
-  accountName: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.75)',
-  },
-  accountBalance: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.onBrand,
   },
   list: {
     backgroundColor: colors.surface,

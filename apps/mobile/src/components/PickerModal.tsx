@@ -1,6 +1,7 @@
+import { isRemoteIcon } from '@budgetaiapp/shared';
 import { Check, ChevronLeft } from 'lucide-react-native';
 import { ReactNode } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
@@ -55,9 +56,7 @@ export default function PickerModal<T extends PickerItem>({
                   activeOpacity={0.6}
                   onPress={() => onSelect(item)}
                   style={[styles.row, index === items.length - 1 && styles.rowLast]}>
-                  <Text style={styles.itemIcon} numberOfLines={1}>
-                    {item.icon}
-                  </Text>
+                  <PickerItemIcon icon={item.icon} />
                   <Text style={styles.itemName}>{item.name}</Text>
                   <View style={styles.rowValue}>
                     {selectedId === item.id && <Check color={colors.tint} size={20} />}
@@ -69,6 +68,18 @@ export default function PickerModal<T extends PickerItem>({
         </SafeAreaView>
       </SafeAreaProvider>
     </Modal>
+  );
+}
+
+function PickerItemIcon({ icon }: { icon: string | null }) {
+  if (icon && isRemoteIcon(icon)) {
+    return <Image source={{ uri: icon }} style={styles.itemIconImage} />;
+  }
+
+  return (
+    <Text style={styles.itemIcon} numberOfLines={1}>
+      {icon}
+    </Text>
   );
 }
 
@@ -128,6 +139,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
     textAlign: 'center',
+  },
+  itemIconImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   itemName: {
     fontSize: 15,

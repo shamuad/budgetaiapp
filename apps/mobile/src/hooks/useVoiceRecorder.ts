@@ -22,7 +22,7 @@ const RECORDING_OPTIONS = {
   ...SPEECH_CAPTURE_OVERRIDES,
 };
 
-const MAX_RECORDING_MS = 15000;
+const MAX_RECORDING_MS = 60_000;
 
 export type VoiceRecording = {
   base64: string;

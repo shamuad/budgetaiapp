@@ -2,7 +2,7 @@ import { getSupabase } from '../supabase';
 import type { Asset, AssetType, CurrencyCode } from '../../types/database';
 
 const COLUMNS =
-  'id, name, symbol, type, icon, quantity, purchase_price, current_price, currency, created_at';
+  'id, name, symbol, type, icon, custom_color, sort_order, quantity, purchase_price, current_price, currency, created_at';
 
 /** The fields an account form owns. */
 export type AssetInput = {
@@ -11,6 +11,7 @@ export type AssetInput = {
   type: AssetType;
   icon: string;
   currency: CurrencyCode;
+  custom_color?: string | null;
 };
 
 // The priced columns are NOT NULL but only mean anything for investments, so
@@ -25,7 +26,7 @@ export async function fetchAssets(): Promise<Asset[]> {
   const { data, error } = await getSupabase()
     .from('assets')
     .select(COLUMNS)
-    // Without an explicit order the picker rows can arrive shuffled.
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
     .returns<Asset[]>();
 
@@ -36,10 +37,28 @@ export async function fetchAssets(): Promise<Asset[]> {
   return data ?? [];
 }
 
+export async function reorderAssets(orderedIds: string[]): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      getSupabase().from('assets').update({ sort_order: index }).eq('id', id),
+    ),
+  );
+
+  const failed = results.find((result) => result.error);
+
+  if (failed?.error) {
+    throw new Error(failed.error.message);
+  }
+}
+
 export async function createAsset(input: AssetInput): Promise<void> {
+  const existing = await fetchAssets();
+  const sort_order =
+    existing.reduce((max, asset) => Math.max(max, asset.sort_order ?? -1), -1) + 1;
+
   const { error } = await getSupabase()
     .from('assets')
-    .insert({ ...input, ...ACCOUNT_PRICING });
+    .insert({ ...input, ...ACCOUNT_PRICING, sort_order });
 
   if (error) {
     throw new Error(error.message);

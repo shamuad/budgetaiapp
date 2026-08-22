@@ -7,3 +7,8 @@ export * from './lib/format';
 export * from './types/database';
 export * from './api/queries';
 export * from './store/useAppStore';
+export * from './utils/brandDictionary';
+export * from './utils/getIcon';
+export * from './utils/iconAsset';
+export * from './utils/accountCardColor';
+export * from './utils/colorSpace';

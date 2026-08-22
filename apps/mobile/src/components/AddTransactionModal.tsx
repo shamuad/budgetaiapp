@@ -393,7 +393,6 @@ export default function AddTransactionModal({
   }, [amountSelection]);
 
   function reportAIError(error: unknown) {
-    console.warn('[AI]', error);
     setFormError(error instanceof Error ? error.message : i18n.t('addTransaction.aiError'));
   }
 
@@ -418,6 +417,10 @@ export default function AddTransactionModal({
     // that says nothing about it keeps the default or the existing pick.
     if (values.asset) {
       setSelectedAsset(values.asset);
+    }
+
+    if (values.currency) {
+      setCurrency(values.currency);
     }
   }
 
@@ -561,6 +564,7 @@ export default function AddTransactionModal({
       date,
       category: selectedCategory,
       asset: selectedAsset,
+      currency: null,
     }, selectedAsset);
 
     if (!result.ok) {
@@ -835,6 +839,7 @@ export default function AddTransactionModal({
                   onPressIn={startRecording}
                   onPressOut={stopRecording}
                   disabled={isAIBusy}
+                  hitSlop={{ top: 28, bottom: 28, left: 28, right: 28 }}
                   style={[
                     styles.aiMic,
                     isRecording && styles.aiMicActive,

@@ -1,8 +1,18 @@
-import { i18n } from '@budgetaiapp/shared';
-import { useState } from 'react';
+import {
+  BrandEntry,
+  getAccountCardColor,
+  getFaviconUrl,
+  i18n,
+  isRemoteIcon,
+  resolveBrand,
+  useAppStore,
+} from '@budgetaiapp/shared';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,12 +24,14 @@ import {
 } from 'react-native';
 
 import { colors, radius, spacing, TOUCH_TARGET } from '../../theme';
+import AccountColorPicker from './AccountColorPicker';
 import SegmentedControl from '../SegmentedControl';
 
 export type EntryDraft<T extends string> = {
   name: string;
   icon: string;
   type: T;
+  customColor?: string | null;
 };
 
 type EntryEditorProps<T extends string> = {
@@ -29,6 +41,8 @@ type EntryEditorProps<T extends string> = {
   typeOptions: { id: T; label: string }[];
   /** Emoji offered by the picker. The first one stands in for a blank icon. */
   iconChoices: string[];
+  /** When true, matches the name against `brandDictionary` and swaps in a favicon logo. */
+  enableBrandDetect?: boolean;
   isSaving: boolean;
   onSave: (draft: EntryDraft<T>) => void;
   /** Omitted while creating, since there is nothing to remove yet. */
@@ -36,41 +50,184 @@ type EntryEditorProps<T extends string> = {
   onCancel: () => void;
 };
 
+function initialBrand(name: string, icon: string, enabled: boolean): BrandEntry | null {
+  if (!enabled) {
+    return null;
+  }
+
+  return resolveBrand(name) ?? (isRemoteIcon(icon) ? resolveBrand(name) : null);
+}
+
+function initialManualIcon(name: string, icon: string, enabled: boolean): boolean {
+  if (!enabled) {
+    return false;
+  }
+
+  if (isRemoteIcon(icon)) {
+    return false;
+  }
+
+  return Boolean(icon && !resolveBrand(name));
+}
+
 /**
  * Name, icon and type form shared by the account and category editors.
- * Rendered in place of the list rather than in its own modal, which keeps the
- * settings stack shallow and behaves like a native push.
+ * Accounts can opt into smart brand detection from the name field.
  */
 export default function EntryEditor<T extends string>({
   title,
   initial,
   typeOptions,
   iconChoices,
+  enableBrandDetect = false,
   isSaving,
   onSave,
   onDelete,
   onCancel,
 }: EntryEditorProps<T>) {
   const [name, setName] = useState(initial.name);
-  const [icon, setIcon] = useState(initial.icon || iconChoices[0]);
+  const [icon, setIcon] = useState(
+    isRemoteIcon(initial.icon) ? iconChoices[0] : initial.icon || iconChoices[0],
+  );
   const [type, setType] = useState<T>(initial.type);
+  const [detectedBrand, setDetectedBrand] = useState<BrandEntry | null>(() =>
+    initialBrand(initial.name, initial.icon, enableBrandDetect),
+  );
+  const [manualIcon, setManualIcon] = useState(() =>
+    initialManualIcon(initial.name, initial.icon, enableBrandDetect),
+  );
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  const draftCustomColor = useAppStore((state) => state.draftAccountCustomColor);
+  const setDraftCustomColor = useAppStore((state) => state.setDraftAccountCustomColor);
+  const resetDraftCustomColor = useAppStore((state) => state.resetDraftAccountCustomColor);
+
+  useEffect(() => {
+    if (!enableBrandDetect) {
+      return;
+    }
+
+    setDraftCustomColor(initial.customColor ?? null);
+
+    return () => {
+      resetDraftCustomColor();
+    };
+  }, [enableBrandDetect, initial.customColor, resetDraftCustomColor, setDraftCustomColor]);
+
+  const previewCardColor = getAccountCardColor({
+    name,
+    type: type as never,
+    custom_color: draftCustomColor,
+  });
+
+  const previewLogoColor =
+    draftCustomColor ?? detectedBrand?.color ?? previewCardColor;
+
+  const previewOpacity = useRef(new Animated.Value(1)).current;
+  const previewScale = useRef(new Animated.Value(1)).current;
+
+  const showBrandLogo = enableBrandDetect && detectedBrand !== null && !manualIcon;
+
+  const animatePreviewSwap = useCallback(
+    (apply: () => void) => {
+      Animated.parallel([
+        Animated.timing(previewOpacity, {
+          toValue: 0,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(previewScale, {
+          toValue: 0.92,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (!finished) {
+          return;
+        }
+
+        apply();
+
+        Animated.parallel([
+          Animated.timing(previewOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.spring(previewScale, {
+            toValue: 1,
+            friction: 7,
+            tension: 80,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    },
+    [previewOpacity, previewScale],
+  );
+
+  const handleNameChange = (text: string) => {
+    setName(text);
+
+    if (!enableBrandDetect) {
+      return;
+    }
+
+    const brand = resolveBrand(text);
+
+    if (brand) {
+      setLogoFailed(false);
+      animatePreviewSwap(() => {
+        setDetectedBrand(brand);
+        setManualIcon(false);
+      });
+      return;
+    }
+
+    if (detectedBrand) {
+      animatePreviewSwap(() => {
+        setDetectedBrand(null);
+      });
+    }
+  };
+
+  const handleManualIconPick = (choice: string) => {
+    setManualIcon(true);
+    setIcon(choice);
+    animatePreviewSwap(() => setDetectedBrand(null));
+  };
+
+  const handleUseCustomIcon = () => {
+    setManualIcon(true);
+    animatePreviewSwap(() => setDetectedBrand(null));
+  };
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [detectedBrand?.domain]);
 
   const handleSave = () => {
     const trimmedName = name.trim();
-    const trimmedIcon = icon.trim();
+    const trimmedIcon = showBrandLogo
+      ? getFaviconUrl(detectedBrand!.domain)
+      : icon.trim();
 
     if (!trimmedName) {
       Alert.alert(i18n.t('common.errorTitle'), i18n.t('manage.missingName'));
       return;
     }
 
-    // Reachable only by clearing the field, since every row starts with an icon.
     if (!trimmedIcon) {
       Alert.alert(i18n.t('common.errorTitle'), i18n.t('manage.missingIcon'));
       return;
     }
 
-    onSave({ name: trimmedName, icon: trimmedIcon, type });
+    onSave({
+      name: trimmedName,
+      icon: trimmedIcon,
+      type,
+      customColor: enableBrandDetect ? draftCustomColor : null,
+    });
   };
 
   return (
@@ -98,39 +255,81 @@ export default function EntryEditor<T extends string>({
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {/* A plain input, so the system keyboard's emoji panel offers everything
-              the phone has rather than only the shortcuts below. */}
-          <TextInput
-            value={icon}
-            onChangeText={setIcon}
-            style={styles.iconInput}
-            textAlign="center"
-            placeholder="🙂"
-            placeholderTextColor={colors.placeholderFaint}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-          />
-          <Text style={styles.iconHint}>{i18n.t('manage.iconHint')}</Text>
+          <Animated.View
+            style={[
+              styles.previewWrap,
+              { opacity: previewOpacity, transform: [{ scale: previewScale }] },
+            ]}>
+            {showBrandLogo ? (
+              <View
+                style={[
+                  styles.brandCircle,
+                  { backgroundColor: previewLogoColor },
+                ]}>
+                <View style={styles.brandLogoWell}>
+                  {!logoFailed ? (
+                    <Image
+                      source={{ uri: getFaviconUrl(detectedBrand!.domain) }}
+                      style={styles.brandLogo}
+                      onError={() => setLogoFailed(true)}
+                    />
+                  ) : (
+                    <Text style={styles.brandFallback}>{detectedBrand!.name.charAt(0)}</Text>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <TextInput
+                value={icon}
+                onChangeText={(text) => {
+                  setManualIcon(true);
+                  setIcon(text);
+                }}
+                style={styles.iconInput}
+                textAlign="center"
+                placeholder="🙂"
+                placeholderTextColor={colors.placeholderFaint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+              />
+            )}
+          </Animated.View>
 
-          <View style={styles.iconGrid}>
-            {iconChoices.map((choice) => (
-              <TouchableOpacity
-                key={choice}
-                activeOpacity={0.6}
-                onPress={() => setIcon(choice)}
-                style={[styles.iconChip, choice === icon && styles.iconChipSelected]}>
-                <Text style={styles.iconChipText}>{choice}</Text>
+          {showBrandLogo ? (
+            <View style={styles.brandMeta}>
+              <Text style={styles.brandTitle}>
+                {i18n.t('manage.brandDetected', { name: detectedBrand!.name })}
+              </Text>
+              <Text style={styles.brandHint}>{i18n.t('manage.brandDetectedHint')}</Text>
+              <TouchableOpacity activeOpacity={0.6} onPress={handleUseCustomIcon}>
+                <Text style={styles.brandLink}>{i18n.t('manage.useCustomIcon')}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.iconHint}>{i18n.t('manage.iconHint')}</Text>
+
+              <View style={styles.iconGrid}>
+                {iconChoices.map((choice) => (
+                  <TouchableOpacity
+                    key={choice}
+                    activeOpacity={0.6}
+                    onPress={() => handleManualIconPick(choice)}
+                    style={[styles.iconChip, choice === icon && styles.iconChipSelected]}>
+                    <Text style={styles.iconChipText}>{choice}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
 
           <View style={styles.card}>
             <View style={styles.row}>
               <Text style={styles.rowLabel}>{i18n.t('manage.name')}</Text>
               <TextInput
                 value={name}
-                onChangeText={setName}
+                onChangeText={handleNameChange}
                 style={styles.rowInput}
                 placeholder={i18n.t('manage.namePlaceholder')}
                 placeholderTextColor={colors.placeholder}
@@ -138,6 +337,14 @@ export default function EntryEditor<T extends string>({
                 returnKeyType="done"
               />
             </View>
+            {enableBrandDetect ? (
+              <AccountColorPicker
+                value={draftCustomColor}
+                previewColor={previewCardColor}
+                onChange={setDraftCustomColor}
+                onReset={resetDraftCustomColor}
+              />
+            ) : null}
             <View style={[styles.row, styles.rowLast, styles.rowStacked]}>
               <Text style={styles.rowLabel}>{i18n.t('manage.kind')}</Text>
               <SegmentedControl options={typeOptions} value={type} onChange={setType} />
@@ -196,14 +403,67 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.lg,
   },
-  iconInput: {
+  previewWrap: {
     alignSelf: 'center',
+  },
+  iconInput: {
     width: 88,
     height: 88,
     fontSize: 40,
     lineHeight: 48,
     backgroundColor: colors.surface,
     borderRadius: 44,
+  },
+  brandCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  brandLogoWell: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  brandLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  brandFallback: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  brandMeta: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: -spacing.sm,
+  },
+  brandTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  brandHint: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  brandLink: {
+    marginTop: spacing.xs,
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.tint,
   },
   iconHint: {
     marginTop: -spacing.sm,
@@ -226,7 +486,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: TOUCH_TARGET / 2,
-    // Always bordered so selecting one cannot nudge the grid's layout.
     borderWidth: 2,
     borderColor: 'transparent',
     backgroundColor: colors.background,

@@ -6,12 +6,14 @@ import {
   type UseMutationOptions,
 } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import type { Asset } from '../types/database';
 
 import i18n from '../i18n';
 import {
   createAsset,
   deleteAsset,
   fetchAssets,
+  reorderAssets,
   updateAsset,
   type AssetInput,
 } from '../lib/api/assets';
@@ -234,6 +236,49 @@ export function useDeleteAssetMutation(
     onSuccess: async (...args) => {
       await invalidateAssetsAndTransactions(queryClient);
       await options?.onSuccess?.(...args);
+    },
+    ...options,
+  });
+}
+
+export function useReorderAssetsMutation(
+  options?: UseMutationOptions<void, Error, string[], { previous: Asset[] | undefined }>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: reorderAssets,
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.assets });
+
+      const previous = queryClient.getQueryData<Asset[]>(queryKeys.assets);
+
+      if (previous) {
+        const byId = new Map(previous.map((asset) => [asset.id, asset]));
+        const next = orderedIds
+          .map((id, index) => {
+            const asset = byId.get(id);
+
+            if (!asset) {
+              return null;
+            }
+
+            return { ...asset, sort_order: index };
+          })
+          .filter(Boolean) as Asset[];
+
+        queryClient.setQueryData(queryKeys.assets, next);
+      }
+
+      return { previous };
+    },
+    onError: (_error, _orderedIds, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.assets, context.previous);
+      }
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.assets });
     },
     ...options,
   });

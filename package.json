@@ -8,5 +8,14 @@
   ],
   "dependencies": {
     "@google/generative-ai": "^0.24.1"
+  },
+  "scripts": {
+    "postinstall": "patch-package"
+  },
+  "overrides": {
+    "react-native-worklets": "0.10.1"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1"
   }
 }

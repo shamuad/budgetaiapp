@@ -1,9 +1,24 @@
-import { i18n } from '@budgetaiapp/shared';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
-import { useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { i18n, isRemoteIcon } from '@budgetaiapp/shared';
+import { ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react-native';
+import { memo, useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import ReorderableList, {
+  useIsActive,
+  useReorderableDrag,
+  type ReorderableListRenderItemInfo,
+} from '../reorder/ReorderableList';
 import { colors, radius, spacing, TOUCH_TARGET } from '../../theme';
 import SegmentedControl from '../SegmentedControl';
 import EntryEditor, { EntryDraft } from './EntryEditor';
@@ -13,6 +28,7 @@ export type ManageEntry<T extends string> = {
   name: string;
   icon: string | null;
   type: T;
+  customColor?: string | null;
   /** Secondary line, such as the account kind or how often the row is used. */
   subtitle: string;
 };
@@ -24,8 +40,12 @@ type ManageEntriesModalProps<T extends string> = {
   typeOptions: { id: T; label: string }[];
   /** Emoji the editor offers for this kind of row. */
   iconChoices: string[];
+  /** Enables smart bank logo detection in the editor (accounts only). */
+  enableBrandDetect?: boolean;
   /** Adds a segmented control that narrows the list to one type. */
   filterable?: boolean;
+  /** Enables drag-and-drop reordering with a grip handle on each row. */
+  reorderable?: boolean;
   addLabel: string;
   createTitle: string;
   editTitle: string;
@@ -33,10 +53,85 @@ type ManageEntriesModalProps<T extends string> = {
   onUpdate: (id: string, draft: EntryDraft<T>) => Promise<void>;
   /** Returns false when the row was kept, having already said why. */
   onDelete: (entry: ManageEntry<T>) => Promise<boolean>;
+  /** Called with the new id order after the user finishes a drag. */
+  onReorder?: (orderedIds: string[]) => Promise<void>;
   onClose: () => void;
 };
 
 const NEW_ENTRY = 'new' as const;
+
+function EntryRowIcon({ icon }: { icon: string | null }) {
+  if (icon && isRemoteIcon(icon)) {
+    return <Image source={{ uri: icon }} style={styles.rowIconImage} />;
+  }
+
+  return <Text style={styles.rowIcon}>{icon}</Text>;
+}
+
+type EntryRowProps<T extends string> = {
+  entry: ManageEntry<T>;
+  /** Dividers sit on top of a row so the first and the lifted row stay clean. */
+  showDivider: boolean;
+  isActive?: boolean;
+  onPress: (entry: ManageEntry<T>) => void;
+  /** Supplying this swaps the chevron for a drag handle. */
+  onDragStart?: () => void;
+};
+
+function EntryRowBase<T extends string>({
+  entry,
+  showDivider,
+  isActive = false,
+  onPress,
+  onDragStart,
+}: EntryRowProps<T>) {
+  return (
+    <View style={[styles.row, showDivider && !isActive && styles.rowDivided]}>
+      <TouchableOpacity
+        activeOpacity={0.6}
+        onPress={() => onPress(entry)}
+        disabled={isActive}
+        style={styles.rowMain}>
+        <EntryRowIcon icon={entry.icon} />
+        <View style={styles.rowText}>
+          <Text style={[styles.rowName, isActive && styles.rowNameActive]} numberOfLines={1}>
+            {entry.name}
+          </Text>
+          <Text style={styles.rowSubtitle} numberOfLines={1}>
+            {entry.subtitle}
+          </Text>
+        </View>
+        {!onDragStart && <ChevronRight color={colors.chevron} size={18} />}
+      </TouchableOpacity>
+
+      {onDragStart && (
+        <TouchableOpacity
+          // A dedicated handle can grab on press-in, which feels instant on both platforms.
+          onPressIn={onDragStart}
+          activeOpacity={0.6}
+          style={[styles.dragHandle, isActive && styles.dragHandleActive]}
+          accessibilityRole="button"
+          accessibilityLabel={i18n.t('manage.reorderHandle')}
+          accessibilityHint={i18n.t('manage.reorderHint')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <GripVertical color={isActive ? colors.tint : colors.placeholderFaint} size={20} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const EntryRow = memo(EntryRowBase) as typeof EntryRowBase;
+
+/** Reads its own drag state from the list, so a drag re-renders one row instead of all. */
+function ReorderableEntryRow<T extends string>(
+  props: Pick<EntryRowProps<T>, 'entry' | 'showDivider' | 'onPress'>,
+) {
+  const isActive = useIsActive();
+  const drag = useReorderableDrag();
+
+  return <EntryRow {...props} isActive={isActive} onDragStart={drag} />;
+}
 
 /** Settings list with add, edit and delete, shared by accounts and categories. */
 export default function ManageEntriesModal<T extends string>({
@@ -45,20 +140,26 @@ export default function ManageEntriesModal<T extends string>({
   entries,
   typeOptions,
   iconChoices,
+  enableBrandDetect = false,
   filterable = false,
+  reorderable = false,
   addLabel,
   createTitle,
   editTitle,
   onCreate,
   onUpdate,
   onDelete,
+  onReorder,
   onClose,
 }: ManageEntriesModalProps<T>) {
   const [filter, setFilter] = useState<T>(typeOptions[0].id);
   const [target, setTarget] = useState<ManageEntry<T> | typeof NEW_ENTRY | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const visibleEntries = filterable ? entries.filter((entry) => entry.type === filter) : entries;
+  const visibleEntries = useMemo(
+    () => (filterable ? entries.filter((entry) => entry.type === filter) : entries),
+    [entries, filterable, filter],
+  );
   const isCreating = target === NEW_ENTRY;
 
   const closeEditor = () => setTarget(null);
@@ -114,25 +215,50 @@ export default function ManageEntriesModal<T extends string>({
     );
   };
 
+  const handleReorder = useCallback(
+    (next: ManageEntry<T>[]) => {
+      onReorder?.(next.map((entry) => entry.id))?.catch((error: Error) =>
+        Alert.alert(i18n.t('common.errorTitle'), error.message),
+      );
+    },
+    [onReorder],
+  );
+
+  const renderRow = useCallback(
+    ({ item, index }: ReorderableListRenderItemInfo<ManageEntry<T>>) => (
+      <ReorderableEntryRow entry={item} showDivider={index > 0} onPress={setTarget} />
+    ),
+    [],
+  );
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      onRequestClose={target ? closeEditor : onClose}>
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-          {target ? (
+      onRequestClose={target ? closeEditor : onClose}
+      // Android Modal is a separate native root; gestures need their own provider.
+      statusBarTranslucent>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <SafeAreaProvider>
+          <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+            {target ? (
             <EntryEditor
               // Remounts per row so the fields always start from the right values.
               key={isCreating ? NEW_ENTRY : target.id}
               title={isCreating ? createTitle : editTitle}
               initial={
                 isCreating
-                  ? { name: '', icon: '', type: filterable ? filter : typeOptions[0].id }
-                  : { name: target.name, icon: target.icon ?? '', type: target.type }
+                  ? { name: '', icon: '', type: filterable ? filter : typeOptions[0].id, customColor: null }
+                  : {
+                      name: target.name,
+                      icon: target.icon ?? '',
+                      type: target.type,
+                      customColor: target.customColor ?? null,
+                    }
               }
               typeOptions={typeOptions}
               iconChoices={iconChoices}
+              enableBrandDetect={enableBrandDetect}
               isSaving={isSaving}
               onSave={handleSave}
               onDelete={isCreating ? undefined : handleDelete}
@@ -157,28 +283,32 @@ export default function ManageEntriesModal<T extends string>({
                 />
               )}
 
-              <ScrollView contentContainerStyle={styles.content}>
-                {visibleEntries.length === 0 ? (
-                  <Text style={styles.empty}>{i18n.t('manage.empty')}</Text>
-                ) : (
+              {visibleEntries.length === 0 ? (
+                <Text style={styles.empty}>{i18n.t('manage.empty')}</Text>
+              ) : reorderable ? (
+                <View style={styles.listArea}>
+                  <View style={styles.card}>
+                    <ReorderableList
+                      data={visibleEntries}
+                      onReorder={handleReorder}
+                      renderItem={renderRow}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <ScrollView contentContainerStyle={styles.content}>
                   <View style={styles.card}>
                     {visibleEntries.map((entry, index) => (
-                      <TouchableOpacity
+                      <EntryRow
                         key={entry.id}
-                        activeOpacity={0.6}
-                        onPress={() => setTarget(entry)}
-                        style={[styles.row, index === visibleEntries.length - 1 && styles.rowLast]}>
-                        <Text style={styles.rowIcon}>{entry.icon}</Text>
-                        <View style={styles.rowText}>
-                          <Text style={styles.rowName}>{entry.name}</Text>
-                          <Text style={styles.rowSubtitle}>{entry.subtitle}</Text>
-                        </View>
-                        <ChevronRight color={colors.chevron} size={18} />
-                      </TouchableOpacity>
+                        entry={entry}
+                        showDivider={index > 0}
+                        onPress={setTarget}
+                      />
                     ))}
                   </View>
-                )}
-              </ScrollView>
+                </ScrollView>
+              )}
 
               <View style={styles.footer}>
                 <TouchableOpacity
@@ -191,13 +321,17 @@ export default function ManageEntriesModal<T extends string>({
               </View>
             </>
           )}
-        </SafeAreaView>
-      </SafeAreaProvider>
+          </SafeAreaView>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -225,6 +359,10 @@ const styles = StyleSheet.create({
     margin: spacing.lg,
     marginBottom: 0,
   },
+  listArea: {
+    flex: 1,
+    padding: spacing.lg,
+  },
   content: {
     padding: spacing.lg,
   },
@@ -235,6 +373,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   card: {
+    flex: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.lg,
@@ -244,17 +383,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     minHeight: TOUCH_TARGET + 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
-  rowLast: {
-    borderBottomWidth: 0,
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  rowNameActive: {
+    fontWeight: '600',
+  },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: TOUCH_TARGET + 12,
+  },
+  dragHandle: {
+    minWidth: TOUCH_TARGET,
+    minHeight: TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  dragHandleActive: {
+    backgroundColor: colors.brandSurface,
   },
   rowIcon: {
     width: 28,
     fontSize: 20,
     lineHeight: 24,
     textAlign: 'center',
+  },
+  rowIconImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   rowText: {
     flex: 1,

@@ -7,9 +7,11 @@ import {
   useAssets,
   useCreateAssetMutation,
   useDeleteAssetMutation,
+  useReorderAssetsMutation,
   useTransactionsQuery,
   useUpdateAssetMutation,
 } from '@budgetaiapp/shared';
+import { useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 
 import { accountTypeLabel, accountTypeOptions } from '../../lib/labels';
@@ -35,19 +37,39 @@ export default function ManageAccountsModal({
   const createAssetMutation = useCreateAssetMutation();
   const updateAssetMutation = useUpdateAssetMutation();
   const deleteAssetMutation = useDeleteAssetMutation();
+  const reorderAssetsMutation = useReorderAssetsMutation();
 
-  const entries: ManageEntry<AssetType>[] = assets.map((asset) => {
-    const used = transactions.filter((row) => row.asset_id === asset.id).length;
-    const type = asset.type ?? 'cash';
+  const entries: ManageEntry<AssetType>[] = useMemo(() => {
+    // Counted in one pass; scanning the ledger per account made every drag frame O(n*m).
+    const usage = new Map<string, number>();
 
-    return {
-      id: asset.id,
-      name: asset.name,
-      icon: asset.icon,
-      type,
-      subtitle: `${accountTypeLabel(type)} · ${i18n.t('manage.usage', { count: used })}`,
-    };
-  });
+    for (const row of transactions) {
+      usage.set(row.asset_id, (usage.get(row.asset_id) ?? 0) + 1);
+    }
+
+    return assets.map((asset) => {
+      const type = asset.type ?? 'cash';
+
+      return {
+        id: asset.id,
+        name: asset.name,
+        icon: asset.icon,
+        type,
+        customColor: asset.custom_color,
+        subtitle: `${accountTypeLabel(type)} · ${i18n.t('manage.usage', {
+          count: usage.get(asset.id) ?? 0,
+        })}`,
+      };
+    });
+  }, [assets, transactions]);
+
+  // `mutateAsync` keeps a stable identity, so the reorderable list never re-renders
+  // its rows just because an unrelated query settled.
+  const { mutateAsync: reorderAssets } = reorderAssetsMutation;
+  const handleReorder = useCallback(
+    (orderedIds: string[]) => reorderAssets(orderedIds),
+    [reorderAssets],
+  );
 
   const toInput = (draft: EntryDraft<AssetType>, id: string | null): AssetInput => {
     const existing = assets.find((asset) => asset.id === id);
@@ -59,6 +81,7 @@ export default function ManageAccountsModal({
       type: draft.type,
       icon: draft.icon,
       currency: existing?.currency ?? DEFAULT_CURRENCY,
+      custom_color: draft.customColor ?? null,
     };
   };
 
@@ -69,6 +92,8 @@ export default function ManageAccountsModal({
       entries={entries}
       typeOptions={accountTypeOptions()}
       iconChoices={ACCOUNT_ICONS}
+      enableBrandDetect
+      reorderable
       addLabel={i18n.t('manage.addAccount')}
       createTitle={i18n.t('manage.newAccount')}
       editTitle={i18n.t('manage.editAccount')}
@@ -78,6 +103,7 @@ export default function ManageAccountsModal({
       onUpdate={async (id, draft) => {
         await updateAssetMutation.mutateAsync({ id, input: toInput(draft, id) });
       }}
+      onReorder={handleReorder}
       onDelete={async (entry) => {
         // `transactions.asset_id` is NOT NULL, so the database would reject this
         // with an opaque constraint error. Say it plainly instead.

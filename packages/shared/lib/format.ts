@@ -122,7 +122,11 @@ export function formatAssetLabel(asset: { icon: string | null; name: string } | 
     return undefined;
   }
 
-  return asset.icon ? `${asset.icon} ${asset.name}` : asset.name;
+  if (asset.icon && !asset.icon.startsWith('http://') && !asset.icon.startsWith('https://')) {
+    return `${asset.icon} ${asset.name}`;
+  }
+
+  return asset.name;
 }
 
 // Strips the number away from a formatted zero, which leaves the symbol on its own.
