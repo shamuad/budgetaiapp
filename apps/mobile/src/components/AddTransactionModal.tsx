@@ -1,5 +1,6 @@
 import {
   Asset,
+  AssetSearchResult,
   Category,
   CategoryType,
   CurrencyCode,
@@ -17,6 +18,8 @@ import {
   TransactionRow,
   TransactionType,
   useAssets,
+  useAssetQuote,
+  useAssetSearch,
   useCategories,
   useCreateTransactionMutation,
   useTransactionsQuery,
@@ -25,6 +28,7 @@ import {
 import DateTimePicker, { DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { Part } from '@google/generative-ai';
 import {
+  AlertTriangle,
   Calendar,
   ChevronRight,
   CircleDollarSign,
@@ -124,6 +128,11 @@ type AddTransactionModalProps = {
 
 function sanitizeAmountInput(input: string) {
   return input.replace(/[^\d.,]/g, '');
+}
+
+/** Whether a live quote's currency is one this app can actually price a transaction in. */
+function isPickableCurrency(code: string | undefined): code is CurrencyCode {
+  return !!code && (PICKABLE_CURRENCIES as string[]).includes(code);
 }
 
 /** An optional figure: blank stays null rather than being written as NaN. */
@@ -274,8 +283,12 @@ export default function AddTransactionModal({
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [selectedToAsset, setSelectedToAsset] = useState<Asset | null>(null);
   const [assetSymbol, setAssetSymbol] = useState('');
+  const [isSymbolFocused, setIsSymbolFocused] = useState(false);
   const [shares, setShares] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
+  // Set only by an explicit dropdown pick, so a live quote is fetched once per
+  // selection rather than on every keystroke while typing a symbol by hand.
+  const [priceSymbol, setPriceSymbol] = useState<string | null>(null);
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY);
   const [exchangeRate, setExchangeRate] = useState(1);
   const [isRateLoading, setIsRateLoading] = useState(false);
@@ -300,7 +313,7 @@ export default function AddTransactionModal({
 
   const { categories } = useCategories();
   const { assets } = useAssets();
-  const { transactions } = useTransactionsQuery();
+  const { transactions, balanceByAsset } = useTransactionsQuery();
   const createTransactionMutation = useCreateTransactionMutation();
   const updateTransactionMutation = useUpdateTransactionMutation();
   const {
@@ -359,13 +372,93 @@ export default function AddTransactionModal({
 
     return [...found].slice(0, SYMBOL_SUGGESTIONS);
   }, [assetSymbol, isInvestmentPurchase, selectedToAsset, transactions]);
+
+  // Live ticker/company search against the shared Yahoo Finance endpoint. Only
+  // meaningful once the holding fields are showing, so it stays idle otherwise.
+  const {
+    results: symbolResults,
+    isSearching: isSymbolSearching,
+    error: symbolSearchError,
+  } = useAssetSearch(isInvestmentPurchase ? assetSymbol : '');
+  const showSymbolDropdown =
+    isInvestmentPurchase && isSymbolFocused && assetSymbol.trim().length > 0;
+
+  // Fetched once per explicit dropdown pick (see `priceSymbol`), to prefill
+  // "Unit Price" without waiting on a debounce.
+  const { quote: assetQuote } = useAssetQuote(priceSymbol ?? '');
+
+  // Shares × Unit Price is the actual cash amount a holding purchase moves —
+  // this is what gets saved as the transaction amount, not whatever is left
+  // over in the hero Amount field.
+  const sharesNum = parseOptionalAmount(shares);
+  const unitPriceNum = parseOptionalAmount(unitPrice);
+  const holdingTotal =
+    isInvestmentPurchase && sharesNum !== null && unitPriceNum !== null
+      ? sharesNum * unitPriceNum
+      : null;
+
   const typeAccent =
     type === 'expense' ? colors.expense : type === 'income' ? colors.income : colors.text;
-  const parsedAmount = parseAmountString(amount);
+  // A holding purchase is priced by its own fields; the hero input just mirrors it.
+  const parsedAmount =
+    isInvestmentPurchase && holdingTotal !== null ? holdingTotal : parseAmountString(amount);
   const showBaseHint =
     currency !== DEFAULT_CURRENCY && Number.isFinite(parsedAmount) && parsedAmount > 0;
   const baseAmount =
     showBaseHint && Number.isFinite(exchangeRate) ? toBaseAmount(parsedAmount, exchangeRate) : null;
+
+  /**
+   * Soft, non-blocking heads-up when a spend or transfer would take the source
+   * account negative. Income never debits, and a card is expected to run
+   * negative, so neither is worth warning about.
+   */
+  const insufficientBalanceWarning = useMemo(() => {
+    if (type === 'income' || !selectedAsset || selectedAsset.type === 'card') {
+      return null;
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !Number.isFinite(exchangeRate)) {
+      return null;
+    }
+
+    const debit = toBaseAmount(parsedAmount, exchangeRate);
+    const currentBalance = balanceByAsset.get(selectedAsset.id) ?? 0;
+
+    if (currentBalance - debit >= 0) {
+      return null;
+    }
+
+    return i18n.t('addTransaction.insufficientBalance', {
+      account: formatAssetLabel(selectedAsset),
+      amount: formatMoney(currentBalance, DEFAULT_CURRENCY),
+    });
+  }, [type, selectedAsset, parsedAmount, exchangeRate, balanceByAsset]);
+
+  // The hero Amount field always mirrors the holding total, so what the user
+  // sees at a glance and what gets saved can never drift apart.
+  useEffect(() => {
+    if (isInvestmentPurchase && holdingTotal !== null) {
+      setAmount(formatAmountForInput(holdingTotal));
+    }
+  }, [isInvestmentPurchase, holdingTotal]);
+
+  // A quote is fetched once per explicit dropdown pick (see `priceSymbol`),
+  // then left alone — the field stays fully editable for limit orders.
+  useEffect(() => {
+    if (!assetQuote) {
+      return;
+    }
+
+    setUnitPrice(formatAmountForInput(assetQuote.regularMarketPrice));
+
+    const quoteCurrency = assetQuote.currency?.toUpperCase();
+    if (isPickableCurrency(quoteCurrency)) {
+      setCurrency(quoteCurrency);
+    }
+    // Only re-run for a new pick, not every time the quote object is refetched
+    // with identical data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetQuote, priceSymbol]);
 
   useEffect(() => {
     if (visible) {
@@ -385,6 +478,7 @@ export default function AddTransactionModal({
     setAssetSymbol('');
     setShares('');
     setUnitPrice('');
+    setPriceSymbol(null);
     setCurrency(DEFAULT_CURRENCY);
     setExchangeRate(1);
     setIsRateLoading(false);
@@ -698,7 +792,10 @@ export default function AddTransactionModal({
     const result = validateDraft(
       {
         title,
-        amount: parseAmountString(amount),
+        // Double entry has to be exact: once shares and unit price are both
+        // known, they — not whatever is left sitting in the Amount field —
+        // are the source of truth for what leaves the source account.
+        amount: isInvestmentPurchase && holdingTotal !== null ? holdingTotal : parseAmountString(amount),
         // A row's type has to match its category, which the toggle alone cannot
         // guarantee. A transfer has no category to defer to.
         type: isTransfer ? 'transfer' : selectedCategory?.type ?? type,
@@ -758,8 +855,10 @@ export default function AddTransactionModal({
 
     setSelectedToAsset(null);
     setAssetSymbol('');
+    setIsSymbolFocused(false);
     setShares('');
     setUnitPrice('');
+    setPriceSymbol(null);
 
     if (selectedCategory && selectedCategory.type !== nextType) {
       setSelectedCategory(null);
@@ -796,7 +895,22 @@ export default function AddTransactionModal({
       setAssetSymbol('');
       setShares('');
       setUnitPrice('');
+      setPriceSymbol(null);
     }
+  }
+
+  function handleSelectSymbolResult(result: AssetSearchResult) {
+    const symbol = result.symbol.toUpperCase();
+    setAssetSymbol(symbol);
+    // A blank title is otherwise left for the user to fill in by hand, so a
+    // recognisable name from the search result is a welcome shortcut.
+    if (!title.trim()) {
+      setTitle(result.name);
+    }
+    setIsSymbolFocused(false);
+    Keyboard.dismiss();
+    // Triggers the live quote fetch that prefills Unit Price below.
+    setPriceSymbol(symbol);
   }
 
   function handleOpenCurrencyPicker() {
@@ -862,7 +976,11 @@ export default function AddTransactionModal({
                   {CURRENCY_META[currency].symbol}
                 </Text>
                 <TextInput
-                  style={[styles.amountInput, { color: typeAccent }]}
+                  style={[
+                    styles.amountInput,
+                    { color: typeAccent },
+                    isInvestmentPurchase && styles.amountInputDisabled,
+                  ]}
                   value={amount}
                   onChangeText={handleAmountChange}
                   onSelectionChange={(event) => {
@@ -872,10 +990,17 @@ export default function AddTransactionModal({
                   placeholder="0,00"
                   placeholderTextColor={colors.placeholderFaint}
                   keyboardType="decimal-pad"
-                  autoFocus
+                  editable={!isInvestmentPurchase}
+                  autoFocus={!isInvestmentPurchase}
                 />
               </View>
-              {currency !== DEFAULT_CURRENCY ? (
+              {isInvestmentPurchase ? (
+                <View style={styles.baseHint}>
+                  <Text style={styles.baseHintText}>
+                    {i18n.t('addTransaction.calculatedFromHolding')}
+                  </Text>
+                </View>
+              ) : currency !== DEFAULT_CURRENCY ? (
                 <View style={styles.baseHint}>
                   {isRateLoading ? (
                     <Text style={styles.baseHintText}>{i18n.t('addTransaction.rateLoading')}</Text>
@@ -989,6 +1114,13 @@ export default function AddTransactionModal({
               </FormRow>
             </View>
 
+            {insufficientBalanceWarning ? (
+              <View style={styles.warningBanner}>
+                <AlertTriangle color={colors.warning} size={16} />
+                <Text style={styles.warningBannerText}>{insufficientBalanceWarning}</Text>
+              </View>
+            ) : null}
+
             {/* Tier two: which holding inside the brokerage this buys. Hidden for a
                 transfer into a plain account, where there is no asset to name. */}
             {isInvestmentPurchase ? (
@@ -1004,25 +1136,75 @@ export default function AddTransactionModal({
                     style={styles.holdingInput}
                     value={assetSymbol}
                     onChangeText={setAssetSymbol}
+                    onFocus={() => setIsSymbolFocused(true)}
+                    onBlur={() => setIsSymbolFocused(false)}
                     placeholder={i18n.t('addTransaction.assetSymbolPlaceholder')}
                     placeholderTextColor={colors.placeholder}
                     autoCapitalize="characters"
                     autoCorrect={false}
                     returnKeyType="done"
                   />
+
+                  {showSymbolDropdown ? (
+                    <View style={styles.symbolDropdown}>
+                      {isSymbolSearching ? (
+                        <View style={styles.symbolDropdownRow}>
+                          <ActivityIndicator size="small" color={colors.textMuted} />
+                          <Text style={styles.symbolDropdownMuted}>
+                            {i18n.t('addTransaction.searchingSymbols')}
+                          </Text>
+                        </View>
+                      ) : symbolResults.length > 0 ? (
+                        <ScrollView
+                          style={styles.symbolDropdownScroll}
+                          keyboardShouldPersistTaps="handled"
+                          nestedScrollEnabled>
+                          {symbolResults.map((result) => (
+                            <TouchableOpacity
+                              key={`${result.symbol}-${result.exchange ?? ''}`}
+                              activeOpacity={0.7}
+                              onPress={() => handleSelectSymbolResult(result)}
+                              style={styles.symbolDropdownRow}>
+                              <View style={styles.symbolDropdownText}>
+                                <Text style={styles.symbolDropdownSymbol}>{result.symbol}</Text>
+                                <Text style={styles.symbolDropdownName} numberOfLines={1}>
+                                  {result.name}
+                                  {result.exchange ? ` · ${result.exchange}` : ''}
+                                </Text>
+                              </View>
+                              {result.type ? (
+                                <Text style={styles.symbolDropdownType}>{result.type}</Text>
+                              ) : null}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      ) : symbolSearchError ? (
+                        <Text style={styles.symbolDropdownMuted}>
+                          {i18n.t('addTransaction.symbolSearchError')}
+                        </Text>
+                      ) : (
+                        <Text style={styles.symbolDropdownMuted}>
+                          {i18n.t('addTransaction.noSymbolResults')}
+                        </Text>
+                      )}
+                    </View>
+                  ) : null}
                 </View>
 
-                {symbolSuggestions.length > 0 ? (
-                  <View style={styles.suggestions}>
-                    {symbolSuggestions.map((symbol) => (
-                      <TouchableOpacity
-                        key={symbol}
-                        activeOpacity={0.7}
-                        onPress={() => setAssetSymbol(symbol)}
-                        style={styles.suggestion}>
-                        <Text style={styles.suggestionText}>{symbol}</Text>
-                      </TouchableOpacity>
-                    ))}
+                {!showSymbolDropdown && symbolSuggestions.length > 0 ? (
+                  <View style={styles.holdingField}>
+                    <Text style={styles.holdingLabel}>{i18n.t('addTransaction.heldInAccount')}</Text>
+                    <View style={styles.suggestions}>
+                      {symbolSuggestions.map((symbol) => (
+                        <TouchableOpacity
+                          key={symbol}
+                          activeOpacity={0.7}
+                          onPress={() => setAssetSymbol(symbol)}
+                          style={styles.suggestion}>
+                          <Text style={styles.suggestionText}>{symbol}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
                 ) : null}
 
@@ -1053,6 +1235,17 @@ export default function AddTransactionModal({
                     />
                   </View>
                 </View>
+
+                {holdingTotal !== null ? (
+                  <View style={styles.holdingTotal}>
+                    <Text style={styles.holdingTotalLabel}>
+                      {i18n.t('addTransaction.totalDeduction')}
+                    </Text>
+                    <Text style={styles.holdingTotalValue}>
+                      {formatMoney(holdingTotal, currency)}
+                    </Text>
+                  </View>
+                ) : null}
 
                 <Text style={styles.holdingHint}>{i18n.t('addTransaction.investmentHint')}</Text>
               </View>
@@ -1302,6 +1495,11 @@ function createStyles(colors: ColorTokens) {
       textAlign: 'center',
       padding: 0,
     },
+    // A holding purchase derives its amount from Shares × Unit Price, so the
+    // hero field only ever mirrors it here — dimmed to read as informational.
+    amountInputDisabled: {
+      opacity: 0.5,
+    },
     baseHint: {
       minHeight: 20,
       alignItems: 'center',
@@ -1320,6 +1518,25 @@ function createStyles(colors: ColorTokens) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderGlass,
       paddingHorizontal: spacing.lg,
+    },
+    // A soft, non-blocking notice — never uses `danger`, which is reserved for
+    // validation failures that stop the save outright.
+    warningBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.warningSurface,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.warning,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    warningBannerText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.warningText,
     },
     // The holding group is glass rather than solid, so it reads as a panel layered
     // over the form instead of another row of it. No elevation: Android composites
@@ -1373,6 +1590,25 @@ function createStyles(colors: ColorTokens) {
       fontSize: 13,
       color: colors.textMuted,
     },
+    holdingTotal: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.brandSurface,
+      borderRadius: radius.md,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    holdingTotalLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.brandLight,
+    },
+    holdingTotalValue: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.brandLight,
+    },
     suggestions: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1391,6 +1627,56 @@ function createStyles(colors: ColorTokens) {
       fontSize: 13,
       fontWeight: '600',
       color: colors.brandLight,
+    },
+    // Sits directly under the ticker input, filling the layout rather than
+    // floating above it — simpler and just as clear inside a scrolling form,
+    // and avoids clipping against the ScrollView's content bounds.
+    symbolDropdown: {
+      marginTop: spacing.xs,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
+      overflow: 'hidden',
+    },
+    symbolDropdownScroll: {
+      maxHeight: 220,
+    },
+    symbolDropdownRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: TOUCH_TARGET,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderGlass,
+    },
+    symbolDropdownText: {
+      flex: 1,
+      gap: 2,
+    },
+    symbolDropdownSymbol: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    symbolDropdownName: {
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+    symbolDropdownType: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.brandLight,
+      textTransform: 'uppercase',
+    },
+    symbolDropdownMuted: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textMuted,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
     },
     row: {
       flexDirection: 'row',

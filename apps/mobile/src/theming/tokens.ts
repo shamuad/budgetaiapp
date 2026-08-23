@@ -32,6 +32,11 @@ export const lightColors = {
   danger: '#DC2626',
   dangerText: '#B91C1C',
   dangerSurface: '#FEE2E2',
+  // Soft, non-blocking notices (e.g. "this exceeds your recorded balance") —
+  // distinct from `danger`, which is reserved for validation/save failures.
+  warning: '#D97706',
+  warningText: '#92400E',
+  warningSurface: 'rgba(217, 119, 6, 0.12)',
   overlay: 'rgba(17, 24, 39, 0.45)',
   onBrand: '#FFFFFF',
   // The AI panel: a saturated indigo block in light mode, and a deep glass
@@ -71,6 +76,9 @@ export const darkColors = {
   danger: '#F87171',
   dangerText: '#FCA5A5',
   dangerSurface: 'rgba(248, 113, 113, 0.14)',
+  warning: '#FBBF24',
+  warningText: '#FDE68A',
+  warningSurface: 'rgba(251, 191, 36, 0.16)',
   overlay: 'rgba(0, 0, 0, 0.6)',
   onBrand: '#FFFFFF',
   aiSurface: 'rgba(99, 102, 241, 0.14)',

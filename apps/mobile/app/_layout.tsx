@@ -1,4 +1,5 @@
 import 'react-native-reanimated';
+import '../src/lib/apiConfig';
 
 import { Stack } from 'expo-router';
 import {

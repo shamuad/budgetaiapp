@@ -5,7 +5,7 @@ import {
   useQueryClient,
   type UseMutationOptions,
 } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Asset } from '../types/database';
 
 import i18n from '../i18n';
@@ -33,6 +33,7 @@ import {
   type TransactionInput,
   type TransactionRow,
 } from '../lib/api/transactions';
+import { getAssetQuote, searchAssets } from '../lib/api/finance';
 import { toBaseAmount } from '../lib/format';
 
 /** Stable cache keys shared by every consumer in the monorepo. */
@@ -178,6 +179,67 @@ export function useCategoriesQuery() {
     categories: query.data ?? [],
     isLoading: query.isLoading,
     refresh: query.refetch,
+  };
+}
+
+const ASSET_SEARCH_DEBOUNCE_MS = 500;
+const MIN_ASSET_SEARCH_LENGTH = 1;
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+
+  return debounced;
+}
+
+/**
+ * Live ticker/company search backed by the Next.js `finance/search` route (Yahoo Finance).
+ * Debounces the raw input so we don't spam the API while the user is still typing.
+ */
+export function useAssetSearch(query: string) {
+  const debouncedQuery = useDebouncedValue(query.trim(), ASSET_SEARCH_DEBOUNCE_MS);
+  const enabled = debouncedQuery.length >= MIN_ASSET_SEARCH_LENGTH;
+
+  const result = useQuery({
+    queryKey: ['finance', 'search', debouncedQuery],
+    queryFn: ({ signal }) => searchAssets(debouncedQuery, signal),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+
+  return {
+    results: result.data ?? [],
+    isSearching: enabled && (result.isFetching || query.trim() !== debouncedQuery),
+    error: result.error instanceof Error ? result.error.message : null,
+  };
+}
+
+/**
+ * Live market price for a single symbol, e.g. to prefill "Unit Price" the
+ * moment a holding is picked from search. Prices drift slowly enough for our
+ * use case that a short cache is fine — this is not a trading terminal.
+ */
+export function useAssetQuote(symbol: string) {
+  const trimmedSymbol = symbol.trim();
+  const enabled = trimmedSymbol.length > 0;
+
+  const result = useQuery({
+    queryKey: ['finance', 'quote', trimmedSymbol.toUpperCase()],
+    queryFn: ({ signal }) => getAssetQuote(trimmedSymbol, signal),
+    enabled,
+    staleTime: 60_000,
+    retry: 0,
+  });
+
+  return {
+    quote: result.data ?? null,
+    isLoading: enabled && result.isFetching,
+    error: result.error instanceof Error ? result.error.message : null,
   };
 }
 
