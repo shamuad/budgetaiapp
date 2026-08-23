@@ -1,7 +1,9 @@
 import { i18n } from '@budgetaiapp/shared';
+import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors, radius, spacing } from '../../theme';
+import { radius, spacing } from '../../theme';
+import { useAppTheme, type ColorTokens } from '../../theming';
 import HueColorPicker from './HueColorPicker';
 
 type AccountColorPickerProps = {
@@ -17,6 +19,8 @@ export default function AccountColorPicker({
   onChange,
   onReset,
 }: AccountColorPickerProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const activeColor = value ?? previewColor;
 
   return (
@@ -39,42 +43,44 @@ export default function AccountColorPicker({
   );
 }
 
-const styles = StyleSheet.create({
-  section: {
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  reset: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.tint,
-  },
-  preview: {
-    height: 56,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  previewText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.onBrand,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    section: {
+      paddingVertical: spacing.md,
+      gap: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    label: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    reset: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.tint,
+    },
+    preview: {
+      height: 56,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.14,
+      shadowRadius: 10,
+      elevation: 4,
+    },
+    previewText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.onBrand,
+    },
+  });
+}

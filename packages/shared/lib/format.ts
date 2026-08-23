@@ -129,6 +129,24 @@ export function formatAssetLabel(asset: { icon: string | null; name: string } | 
   return asset.name;
 }
 
+/**
+ * Both sides of a transfer, plus the holding it bought when there is one:
+ * "💳 Card → 📈 Brokerage · VUSA.AS".
+ */
+export function formatTransferLabel(
+  from: { icon: string | null; name: string } | null | undefined,
+  to: { icon: string | null; name: string } | null | undefined,
+  assetSymbol?: string | null,
+) {
+  const route = [formatAssetLabel(from), formatAssetLabel(to)].filter(Boolean).join(' → ');
+
+  if (!route) {
+    return assetSymbol ?? undefined;
+  }
+
+  return assetSymbol ? `${route} · ${assetSymbol}` : route;
+}
+
 // Strips the number away from a formatted zero, which leaves the symbol on its own.
 // formatToParts would be tidier, but it is not available on every Hermes build.
 export function currencySymbol(currency: CurrencyCode) {

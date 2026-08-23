@@ -39,6 +39,7 @@ const TYPE_FALLBACK: Record<string, string> = {
   cash: '#047857',
   card: '#4338CA',
   bank: '#0F172A',
+  investment: '#0F766E',
   default: '#6D28D9',
 };
 

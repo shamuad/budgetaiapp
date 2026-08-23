@@ -1,6 +1,7 @@
 import {
   Asset,
   Category,
+  CategoryType,
   CurrencyCode,
   fromISODate,
   i18n,
@@ -30,9 +31,16 @@ export type TransactionValues = {
   amount: number;
   type: TransactionType;
   date: Date;
+  // Null on a transfer, which moves money instead of categorising a spend.
   category: Category | null;
   // Null whenever the user did not name an account, which leaves the current pick alone.
   asset: Asset | null;
+  // The destination of a transfer, resolved to one of the user's own accounts.
+  toAsset: Asset | null;
+  // The holding a transfer bought inside that account, e.g. 'VUSA.AS' or 'BTC'.
+  assetSymbol: string | null;
+  shares: number | null;
+  unitPrice: number | null;
   // Null when no currency was mentioned, which leaves the current selection alone.
   currency: CurrencyCode | null;
 };
@@ -94,11 +102,20 @@ export function buildTransactionPrompt(
 
   const today = new Date();
   const weekday = today.toLocaleDateString('en-US', { weekday: 'long' });
+  // Naming the kind lets the model tell a brokerage from a current account, which
+  // is what a purchase of a stock or an ETF has to be transferred into.
+  const accountList = assets
+    .map((item) => `${item.name} (${item.type ?? 'account'})`)
+    .join(', ');
+  const investmentAccounts = assets
+    .filter((item) => item.type === 'investment')
+    .map((item) => item.name)
+    .join(', ');
 
   return [
     'You are a financial assistant. Extract the transaction details from the user.',
     'Respond ONLY with a JSON object shaped like:',
-    '{"title": string, "amount": number, "type": "expense" | "income", "category": string, "account_name": string | null, "currency": "EUR" | "USD" | "GBP" | "TRY" | null, "date": "YYYY-MM-DD", "action": "save" | "cancel" | "none"}',
+    '{"title": string, "amount": number, "type": "expense" | "income" | "transfer", "category": string | null, "account_name": string | null, "to_account_name": string | null, "asset_symbol": string | null, "shares": number | null, "unit_price": number | null, "currency": "EUR" | "USD" | "GBP" | "TRY" | null, "date": "YYYY-MM-DD", "action": "save" | "cancel" | "none"}',
     '"amount" must be a JSON number (never a string) with a dot as the decimal separator, in major currency units.',
     'Examples: forty-two euros -> 42 or 42.5, never 4200; one thousand -> 1000.',
     '"currency" must be one of "EUR", "USD", "GBP", "TRY", or null.',
@@ -107,9 +124,23 @@ export function buildTransactionPrompt(
     `Expense categories: ${names('expense')}.`,
     `Income categories: ${names('income')}.`,
     '"category" must be exactly one of those names, copied without any extra words.',
-    `Accounts: ${assets.map((item) => item.name).join(', ')}.`,
+    `Accounts, with their kind in brackets: ${accountList}.`,
     'Set "account_name" to exactly one of those account names when the user says which account,',
     'card, wallet or bank the money moved through. Use null when they do not mention one.',
+    // Buying an asset is not spending: the money is still the user's, it has only
+    // changed form. Booking it as an expense would corrupt net cash flow.
+    'BUYING AN INVESTMENT IS NEVER AN EXPENSE. If the user describes buying a stock,',
+    'an ETF, an index fund, crypto or any other asset (for example "bought S&P 500",',
+    '"put 500 euros into VUSA", "invested in Bitcoin"), then:',
+    'set "type" to "transfer"; set "account_name" to the account the money came from;',
+    `set "to_account_name" to the investment account that receives it${investmentAccounts ? ` (one of: ${investmentAccounts})` : ''};`,
+    'set "asset_symbol" to the asset the user named, as an uppercase market ticker when',
+    'you recognise one (S&P 500 -> "SPY", Bitcoin -> "BTC", VUSA -> "VUSA.AS"), otherwise',
+    'the asset name in uppercase; and set "category" to null, because a transfer has none.',
+    'Set "shares" and "unit_price" as JSON numbers only when the user states how many',
+    'units they bought or the price per unit. Use null for anything they did not say.',
+    'Moving money between two of the user\'s own accounts is also a "transfer".',
+    'For "expense" and "income", leave "to_account_name", "asset_symbol", "shares" and "unit_price" null.',
     `Today is ${toISODate(today)} (${weekday}). Resolve relative dates such as "yesterday" or "last friday" against it.`,
     'If the user does not mention a date, use today.',
     'Set "action" to "save" only when the user explicitly asks to save or record it,',
@@ -121,7 +152,7 @@ export function buildTransactionPrompt(
 
 // The same name can exist for both types (e.g. "Diğer"), so the type has to match too.
 // The model sometimes echoes the type as a suffix ("Market (expense)"), so that is stripped.
-export function findCategory(categories: Category[], name: string, type: TransactionType) {
+export function findCategory(categories: Category[], name: string, type: CategoryType) {
   const target = name
     .replace(/\s*\((expense|income)\)\s*$/i, '')
     .trim()
@@ -165,6 +196,37 @@ export function findAsset(assets: Asset[], name: string) {
     ) ??
     null
   );
+}
+
+/**
+ * Where a transfer lands. Falls back to the single investment account when the
+ * user plainly bought an asset but never said which brokerage holds it — with
+ * only one, there is nothing to guess.
+ */
+export function findTransferTarget(assets: Asset[], name: string | null | undefined) {
+  const named = name ? findAsset(assets, name) : null;
+
+  if (named) {
+    return named;
+  }
+
+  const investments = assets.filter((item) => item.type === 'investment');
+
+  return investments.length === 1 ? investments[0] : null;
+}
+
+/** Symbols are stored uppercase, so "vusa.as" and "VUSA.AS" are one holding. */
+export function normalizeAssetSymbol(raw: string | null | undefined) {
+  const trimmed = raw?.trim().toUpperCase() ?? '';
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** An optional figure from the model: anything unusable becomes null, never NaN. */
+function parsePositiveNumber(value: unknown): number | null {
+  const parsed = parseAIAmount(value);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 const SUPPORTED_CURRENCIES: CurrencyCode[] = ['EUR', 'USD', 'GBP', 'TRY'];
@@ -225,8 +287,12 @@ export function parseTransactionResponse(
     title?: string;
     amount?: number | string;
     type?: string;
-    category?: string;
+    category?: string | null;
     account_name?: string | null;
+    to_account_name?: string | null;
+    asset_symbol?: string | null;
+    shares?: number | string | null;
+    unit_price?: number | string | null;
     currency?: string | null;
     date?: string;
     action?: string;
@@ -251,21 +317,31 @@ export function parseTransactionResponse(
     throw new Error(i18n.t('addTransaction.aiNoAmount'));
   }
 
-  const type: TransactionType = parsed.type === 'income' ? 'income' : 'expense';
-  const category = findCategory(categories, parsed.category ?? 'Diğer', type);
+  const type: TransactionType =
+    parsed.type === 'income' || parsed.type === 'transfer' ? parsed.type : 'expense';
+  // A transfer is uncategorised by definition, and only a transfer can name a
+  // destination or a holding, so anything the model volunteers is dropped.
+  const category =
+    type === 'transfer' ? null : findCategory(categories, parsed.category ?? 'Diğer', type);
   const asset = parsed.account_name ? findAsset(assets, parsed.account_name) : null;
+  const toAsset = type === 'transfer' ? findTransferTarget(assets, parsed.to_account_name) : null;
+  const assetSymbol = type === 'transfer' ? normalizeAssetSymbol(parsed.asset_symbol) : null;
   const currency = normalizeCurrency(parsed.currency);
   const date = (parsed.date ? fromISODate(parsed.date) : null) ?? fallbackDate;
 
   return {
     action,
     values: {
-      title: parsed.title?.trim() || category?.name || '',
+      title: parsed.title?.trim() || category?.name || assetSymbol || '',
       amount,
       type,
       date,
       category,
       asset,
+      toAsset,
+      assetSymbol,
+      shares: type === 'transfer' ? parsePositiveNumber(parsed.shares) : null,
+      unitPrice: type === 'transfer' ? parsePositiveNumber(parsed.unit_price) : null,
       currency,
     },
   };

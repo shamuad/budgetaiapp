@@ -53,13 +53,56 @@ export function createQueryClient() {
   });
 }
 
-/** Balance is always in the user base currency, using each row's locked-in rate. */
+/**
+ * Balance is always in the user base currency, using each row's locked-in rate.
+ * A transfer only shifts money between the user's own accounts, so it leaves the
+ * headline figure untouched — counting it would double-report net cash flow.
+ */
 function calculateBalance(rows: TransactionRow[]) {
   return rows.reduce((total, row) => {
+    if (row.type === 'transfer') {
+      return total;
+    }
+
     const base = toBaseAmount(row.amount, row.exchange_rate);
 
     return row.type === 'expense' ? total - base : total + base;
   }, 0);
+}
+
+/**
+ * Net recorded movement per account. A transfer is booked as double entry: it
+ * leaves the source account and lands in the destination, so both sides move
+ * while the total above stays flat.
+ */
+function calculateBalancesByAsset(rows: TransactionRow[]) {
+  const totals = new Map<string, number>();
+
+  const add = (assetId: string, delta: number) => {
+    totals.set(assetId, (totals.get(assetId) ?? 0) + delta);
+  };
+
+  for (const row of rows) {
+    const base = toBaseAmount(row.amount, row.exchange_rate);
+
+    if (row.type === 'transfer') {
+      if (row.asset_id) {
+        add(row.asset_id, -base);
+      }
+
+      if (row.to_asset_id) {
+        add(row.to_asset_id, base);
+      }
+
+      continue;
+    }
+
+    if (row.asset_id) {
+      add(row.asset_id, row.type === 'expense' ? -base : base);
+    }
+  }
+
+  return totals;
 }
 
 function invalidateTransactions(queryClient: QueryClient) {
@@ -93,9 +136,15 @@ export function useTransactionsQuery() {
     [query.data],
   );
 
+  const balanceByAsset = useMemo(
+    () => calculateBalancesByAsset(query.data ?? []),
+    [query.data],
+  );
+
   return {
     transactions: query.data ?? [],
     totalBalance,
+    balanceByAsset,
     isLoading: query.isLoading,
     error: query.error
       ? query.error instanceof Error

@@ -1,6 +1,6 @@
 import { i18n } from '@budgetaiapp/shared';
 import { Pencil, Trash2 } from 'lucide-react-native';
-import { ReactNode, useRef } from 'react';
+import { ReactNode, useMemo, useRef } from 'react';
 import {
   Alert,
   AlertButton,
@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 
-import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
+import { radius, spacing, TOUCH_TARGET } from '../theme';
+import { useAppTheme, type ColorTokens } from '../theming';
 
 type TransactionItemProps = {
   icon: ReactNode;
@@ -41,6 +42,8 @@ export default function TransactionItem({
   onEdit,
   onDelete,
 }: TransactionItemProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const swipeableRef = useRef<Swipeable>(null);
   const isActionable = Boolean(onEdit || onDelete);
 
@@ -157,79 +160,81 @@ export default function TransactionItem({
   );
 }
 
-const styles = StyleSheet.create({
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  itemFlat: {
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-    padding: 0,
-  },
-  // Matches the card behind it, so the row looks unchanged while staying opaque.
-  itemOpaque: {
-    backgroundColor: colors.surface,
-  },
-  iconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brandSurface,
-  },
-  texts: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  // Nested in the subtitle, so it only needs to differ in weight.
-  meta: {
-    fontWeight: '500',
-  },
-  amount: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  amountPositive: {
-    color: colors.income,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  action: {
-    width: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    minHeight: TOUCH_TARGET,
-  },
-  actionEdit: {
-    backgroundColor: colors.tint,
-  },
-  actionDelete: {
-    backgroundColor: colors.danger,
-    borderTopRightRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
-  },
-  actionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.onBrand,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.lg,
+      padding: spacing.lg,
+    },
+    itemFlat: {
+      backgroundColor: 'transparent',
+      borderRadius: 0,
+      padding: 0,
+    },
+    // Matches the card behind it, so the row looks unchanged while staying opaque.
+    itemOpaque: {
+      backgroundColor: colors.surfaceElevated,
+    },
+    iconWrapper: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.brandSurface,
+    },
+    texts: {
+      flex: 1,
+      gap: 2,
+    },
+    title: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.textMuted,
+    },
+    // Nested in the subtitle, so it only needs to differ in weight.
+    meta: {
+      fontWeight: '500',
+    },
+    amount: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    amountPositive: {
+      color: colors.income,
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+    },
+    action: {
+      width: 76,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      minHeight: TOUCH_TARGET,
+    },
+    actionEdit: {
+      backgroundColor: colors.tint,
+    },
+    actionDelete: {
+      backgroundColor: colors.danger,
+      borderTopRightRadius: radius.lg,
+      borderBottomRightRadius: radius.lg,
+    },
+    actionText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.onBrand,
+    },
+  });
+}

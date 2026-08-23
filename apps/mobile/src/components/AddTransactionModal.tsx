@@ -1,6 +1,7 @@
 import {
   Asset,
   Category,
+  CategoryType,
   CurrencyCode,
   DEFAULT_CURRENCY,
   formatAmountForInput,
@@ -18,22 +19,24 @@ import {
   useAssets,
   useCategories,
   useCreateTransactionMutation,
+  useTransactionsQuery,
   useUpdateTransactionMutation,
 } from '@budgetaiapp/shared';
 import DateTimePicker, { DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { Part } from '@google/generative-ai';
 import {
-  ArrowUpDown,
   Calendar,
   ChevronRight,
   CircleDollarSign,
   Folder,
+  Landmark,
   Mic,
   Sparkles,
+  TrendingUp,
   Type,
   Wallet,
 } from 'lucide-react-native';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -53,12 +56,14 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import {
   askGemini,
   buildTransactionPrompt,
+  normalizeAssetSymbol,
   parseTransactionResponse,
   TransactionValues,
 } from '../lib/ai';
 import { fetchExchangeRate, PICKABLE_CURRENCIES } from '../lib/exchangeRates';
-import { transactionTypeOptions } from '../lib/labels';
-import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
+import { categoryTypeOptions, transactionTypeOptions } from '../lib/labels';
+import { radius, spacing, TOUCH_TARGET } from '../theme';
+import { useAppTheme, type ColorTokens } from '../theming';
 import PickerModal from './PickerModal';
 import SegmentedControl from './SegmentedControl';
 
@@ -76,6 +81,11 @@ type CurrencyOption = {
   icon: string;
 };
 
+type ModalStyles = ReturnType<typeof createStyles>;
+
+/** Enough previously-held symbols to be useful without wrapping onto many lines. */
+const SYMBOL_SUGGESTIONS = 4;
+
 function currencyOptions(): CurrencyOption[] {
   return PICKABLE_CURRENCIES.map((code) => {
     const meta = CURRENCY_META[code];
@@ -88,9 +98,11 @@ function currencyOptions(): CurrencyOption[] {
   });
 }
 
-// A draft is a validated transaction: both relations are resolved, never null.
+// A draft is a validated transaction: the source account is always resolved, and
+// a transfer has been checked to name a destination that differs from it.
 type TransactionDraft = Omit<TransactionValues, 'category' | 'asset'> & {
-  category: Category;
+  /** Null on a transfer, which moves money instead of categorising a spend. */
+  category: Category | null;
   asset: Asset;
 };
 
@@ -114,7 +126,18 @@ function sanitizeAmountInput(input: string) {
   return input.replace(/[^\d.,]/g, '');
 }
 
-/** The account is not part of the AI result, so it is validated alongside it. */
+/** An optional figure: blank stays null rather than being written as NaN. */
+function parseOptionalAmount(input: string): number | null {
+  if (input.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = parseAmountString(input);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+/** The source account is not part of the AI result, so it is validated alongside it. */
 function validateDraft(values: TransactionValues, asset: Asset | null): ValidationResult {
   if (!Number.isFinite(values.amount) || values.amount <= 0) {
     return { ok: false, message: i18n.t('addTransaction.invalidAmount') };
@@ -126,26 +149,54 @@ function validateDraft(values: TransactionValues, asset: Asset | null): Validati
     return { ok: false, message: i18n.t('addTransaction.missingTitle') };
   }
 
-  if (!values.category) {
-    return { ok: false, message: i18n.t('addTransaction.missingCategory') };
-  }
-
   if (!asset) {
     return { ok: false, message: i18n.t('addTransaction.missingAsset') };
   }
 
-  return { ok: true, draft: { ...values, title, category: values.category, asset } };
+  // Double entry: a transfer names both sides and is never categorised.
+  if (values.type === 'transfer') {
+    if (!values.toAsset) {
+      return { ok: false, message: i18n.t('addTransaction.missingToAsset') };
+    }
+
+    if (values.toAsset.id === asset.id) {
+      return { ok: false, message: i18n.t('addTransaction.sameAsset') };
+    }
+
+    return { ok: true, draft: { ...values, title, category: null, asset } };
+  }
+
+  if (!values.category) {
+    return { ok: false, message: i18n.t('addTransaction.missingCategory') };
+  }
+
+  // Only a transfer can carry a destination or a holding.
+  return {
+    ok: true,
+    draft: {
+      ...values,
+      title,
+      category: values.category,
+      asset,
+      toAsset: null,
+      assetSymbol: null,
+      shares: null,
+      unitPrice: null,
+    },
+  };
 }
 
 type FormRowProps = {
   icon: ReactNode;
   label: string;
   children: ReactNode;
+  styles: ModalStyles;
+  colors: ColorTokens;
   isLast?: boolean;
   onPress?: () => void;
 };
 
-function FormRow({ icon, label, children, isLast, onPress }: FormRowProps) {
+function FormRow({ icon, label, children, styles, colors, isLast, onPress }: FormRowProps) {
   const content = (
     <>
       <View style={styles.rowIcon}>{icon}</View>
@@ -173,8 +224,9 @@ type CategoryPickerProps = {
   visible: boolean;
   categories: Category[];
   selectedId?: string;
-  tab: TransactionType;
-  onChangeTab: (tab: TransactionType) => void;
+  tab: CategoryType;
+  styles: ModalStyles;
+  onChangeTab: (tab: CategoryType) => void;
   onSelect: (category: Category) => void;
   onClose: () => void;
 };
@@ -184,6 +236,7 @@ function CategoryPicker({
   categories,
   selectedId,
   tab,
+  styles,
   onChangeTab,
   onSelect,
   onClose,
@@ -197,7 +250,7 @@ function CategoryPicker({
       onSelect={onSelect}
       onClose={onClose}>
       <SegmentedControl
-        options={transactionTypeOptions()}
+        options={categoryTypeOptions()}
         value={tab}
         onChange={onChangeTab}
         style={styles.tabs}
@@ -211,20 +264,27 @@ export default function AddTransactionModal({
   onClose,
   transactionToEdit = null,
 }: AddTransactionModalProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<TransactionType>('expense');
   const [date, setDate] = useState(new Date());
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [selectedToAsset, setSelectedToAsset] = useState<Asset | null>(null);
+  const [assetSymbol, setAssetSymbol] = useState('');
+  const [shares, setShares] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY);
   const [exchangeRate, setExchangeRate] = useState(1);
   const [isRateLoading, setIsRateLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [showToAssetPicker, setShowToAssetPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [categoryTab, setCategoryTab] = useState<TransactionType>('expense');
+  const [categoryTab, setCategoryTab] = useState<CategoryType>('expense');
   const [aiInput, setAiInput] = useState('');
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -240,6 +300,7 @@ export default function AddTransactionModal({
 
   const { categories } = useCategories();
   const { assets } = useAssets();
+  const { transactions } = useTransactionsQuery();
   const createTransactionMutation = useCreateTransactionMutation();
   const updateTransactionMutation = useUpdateTransactionMutation();
   const {
@@ -260,7 +321,46 @@ export default function AddTransactionModal({
 
   const isAIBusy = isParsing || isProcessing;
   const isEditing = transactionToEdit !== null;
-  const amountColor = type === 'expense' ? styles.expense : styles.income;
+  const isTransfer = type === 'transfer';
+  // Only a transfer into an investment account buys a holding. A transfer into a
+  // plain bank account is just cash moving, and names no asset.
+  const isInvestmentPurchase = isTransfer && selectedToAsset?.type === 'investment';
+
+  /**
+   * Symbols already held in the destination account, matched against what has
+   * been typed. Repeat purchases are the common case, and they must reuse the
+   * exact same symbol to group into one holding — so this is the search.
+   */
+  const symbolSuggestions = useMemo(() => {
+    if (!isInvestmentPurchase) {
+      return [];
+    }
+
+    const query = assetSymbol.trim().toUpperCase();
+    const found = new Set<string>();
+
+    for (const row of transactions) {
+      const symbol = row.asset_symbol;
+
+      if (!symbol || symbol === query) {
+        continue;
+      }
+
+      if (selectedToAsset && row.to_asset_id !== selectedToAsset.id) {
+        continue;
+      }
+
+      if (query.length > 0 && !symbol.startsWith(query)) {
+        continue;
+      }
+
+      found.add(symbol);
+    }
+
+    return [...found].slice(0, SYMBOL_SUGGESTIONS);
+  }, [assetSymbol, isInvestmentPurchase, selectedToAsset, transactions]);
+  const typeAccent =
+    type === 'expense' ? colors.expense : type === 'income' ? colors.income : colors.text;
   const parsedAmount = parseAmountString(amount);
   const showBaseHint =
     currency !== DEFAULT_CURRENCY && Number.isFinite(parsedAmount) && parsedAmount > 0;
@@ -281,12 +381,17 @@ export default function AddTransactionModal({
     setDate(new Date());
     setSelectedCategory(null);
     setSelectedAsset(null);
+    setSelectedToAsset(null);
+    setAssetSymbol('');
+    setShares('');
+    setUnitPrice('');
     setCurrency(DEFAULT_CURRENCY);
     setExchangeRate(1);
     setIsRateLoading(false);
     setShowDatePicker(false);
     setShowCategoryPicker(false);
     setShowAssetPicker(false);
+    setShowToAssetPicker(false);
     setShowCurrencyPicker(false);
     setAiInput('');
     setPendingDraft(null);
@@ -322,6 +427,16 @@ export default function AddTransactionModal({
       categories.find((category) => category.id === transactionToEdit.category_id) ?? null,
     );
     setSelectedAsset(assets.find((asset) => asset.id === transactionToEdit.asset_id) ?? null);
+    setSelectedToAsset(assets.find((asset) => asset.id === transactionToEdit.to_asset_id) ?? null);
+    setAssetSymbol(transactionToEdit.asset_symbol ?? '');
+    setShares(
+      transactionToEdit.shares !== null ? formatAmountForInput(transactionToEdit.shares) : '',
+    );
+    setUnitPrice(
+      transactionToEdit.unit_price !== null
+        ? formatAmountForInput(transactionToEdit.unit_price)
+        : '',
+    );
   }, [assets, categories, transactionToEdit, visible]);
 
   // Create mode opens on a default account. Guarded on the current pick so it only
@@ -419,6 +534,23 @@ export default function AddTransactionModal({
       setSelectedAsset(values.asset);
     }
 
+    if (values.type === 'transfer') {
+      if (values.toAsset) {
+        setSelectedToAsset(values.toAsset);
+      }
+
+      setAssetSymbol(values.assetSymbol ?? '');
+      setShares(values.shares !== null ? formatAmountForInput(values.shares) : '');
+      setUnitPrice(values.unitPrice !== null ? formatAmountForInput(values.unitPrice) : '');
+    } else {
+      // The request turned out not to be a transfer, so the fields only a
+      // transfer can carry are cleared rather than left over from a previous one.
+      setSelectedToAsset(null);
+      setAssetSymbol('');
+      setShares('');
+      setUnitPrice('');
+    }
+
     if (values.currency) {
       setCurrency(values.currency);
     }
@@ -476,9 +608,12 @@ export default function AddTransactionModal({
       applyValues(resolved);
 
       if (action === 'save') {
-        // `applyValues` has only queued its state update, so the account the AI
-        // just named is read from the result rather than from stale state.
-        const result = validateDraft(resolved, resolved.asset ?? selectedAsset);
+        // `applyValues` has only queued its state update, so the accounts the AI
+        // just named are read from the result rather than from stale state.
+        const result = validateDraft(
+          { ...resolved, toAsset: resolved.toAsset ?? selectedToAsset },
+          resolved.asset ?? selectedAsset,
+        );
 
         if (result.ok) {
           setPendingDraft(result.draft);
@@ -529,8 +664,12 @@ export default function AddTransactionModal({
         exchange_rate: exchangeRate,
         type: draft.type,
         date: toISODate(draft.date),
-        category_id: draft.category.id,
+        category_id: draft.category?.id ?? null,
         asset_id: draft.asset.id,
+        to_asset_id: draft.toAsset?.id ?? null,
+        asset_symbol: draft.assetSymbol,
+        shares: draft.shares,
+        unit_price: draft.unitPrice,
       };
 
       if (transactionToEdit) {
@@ -556,16 +695,25 @@ export default function AddTransactionModal({
   async function handleSave() {
     await cancelRecording();
 
-    const result = validateDraft({
-      title,
-      amount: parseAmountString(amount),
-      // A row's type has to match its category, which the toggle alone cannot guarantee.
-      type: selectedCategory?.type ?? type,
-      date,
-      category: selectedCategory,
-      asset: selectedAsset,
-      currency: null,
-    }, selectedAsset);
+    const result = validateDraft(
+      {
+        title,
+        amount: parseAmountString(amount),
+        // A row's type has to match its category, which the toggle alone cannot
+        // guarantee. A transfer has no category to defer to.
+        type: isTransfer ? 'transfer' : selectedCategory?.type ?? type,
+        date,
+        category: isTransfer ? null : selectedCategory,
+        asset: selectedAsset,
+        toAsset: isTransfer ? selectedToAsset : null,
+        // A holding only exists inside an investment account.
+        assetSymbol: isInvestmentPurchase ? normalizeAssetSymbol(assetSymbol) : null,
+        shares: isInvestmentPurchase ? parseOptionalAmount(shares) : null,
+        unitPrice: isInvestmentPurchase ? parseOptionalAmount(unitPrice) : null,
+        currency: null,
+      },
+      selectedAsset,
+    );
 
     if (!result.ok) {
       setFormError(result.message);
@@ -583,7 +731,7 @@ export default function AddTransactionModal({
 
   function handleOpenCategoryPicker() {
     Keyboard.dismiss();
-    setCategoryTab(type);
+    setCategoryTab(type === 'income' ? 'income' : 'expense');
     setShowCategoryPicker(true);
   }
 
@@ -596,10 +744,22 @@ export default function AddTransactionModal({
   /**
    * A category belongs to exactly one type, and the save derives the saved type
    * from the category. Dropping a mismatched pick keeps the toggle authoritative
-   * instead of letting the stale category silently overrule it.
+   * instead of letting the stale category silently overrule it. Switching away
+   * from a transfer likewise drops the fields only a transfer can carry.
    */
   function handleChangeType(nextType: TransactionType) {
     setType(nextType);
+    setFormError(null);
+
+    if (nextType === 'transfer') {
+      setSelectedCategory(null);
+      return;
+    }
+
+    setSelectedToAsset(null);
+    setAssetSymbol('');
+    setShares('');
+    setUnitPrice('');
 
     if (selectedCategory && selectedCategory.type !== nextType) {
       setSelectedCategory(null);
@@ -614,6 +774,29 @@ export default function AddTransactionModal({
   function handleSelectAsset(asset: Asset) {
     setSelectedAsset(asset);
     setShowAssetPicker(false);
+
+    // The two sides of a transfer must differ, so a clash drops the destination
+    // rather than leaving the form in a state that cannot be saved.
+    if (selectedToAsset?.id === asset.id) {
+      setSelectedToAsset(null);
+    }
+  }
+
+  function handleOpenToAssetPicker() {
+    Keyboard.dismiss();
+    setShowToAssetPicker(true);
+  }
+
+  function handleSelectToAsset(asset: Asset) {
+    setSelectedToAsset(asset);
+    setShowToAssetPicker(false);
+
+    // A holding only exists inside a brokerage, so a plain account drops it.
+    if (asset.type !== 'investment') {
+      setAssetSymbol('');
+      setShares('');
+      setUnitPrice('');
+    }
   }
 
   function handleOpenCurrencyPicker() {
@@ -675,9 +858,11 @@ export default function AddTransactionModal({
             automaticallyAdjustKeyboardInsets>
             <View style={styles.amountSection}>
               <View style={styles.amountRow}>
-                <Text style={[styles.currency, amountColor]}>{CURRENCY_META[currency].symbol}</Text>
+                <Text style={[styles.currency, { color: typeAccent }]}>
+                  {CURRENCY_META[currency].symbol}
+                </Text>
                 <TextInput
-                  style={[styles.amountInput, amountColor]}
+                  style={[styles.amountInput, { color: typeAccent }]}
                   value={amount}
                   onChangeText={handleAmountChange}
                   onSelectionChange={(event) => {
@@ -705,8 +890,19 @@ export default function AddTransactionModal({
               ) : null}
             </View>
 
+            {/* The direction of the money decides which fields below apply, so it
+                leads the form rather than sitting inside the details card. */}
+            <SegmentedControl
+              options={transactionTypeOptions()}
+              value={type}
+              onChange={handleChangeType}
+              activeColor={typeAccent}
+            />
+
             <View style={styles.card}>
               <FormRow
+                styles={styles}
+                colors={colors}
                 icon={<Type color={colors.textMuted} size={20} />}
                 label={i18n.t('addTransaction.titleLabel')}>
                 <TextInput
@@ -720,30 +916,8 @@ export default function AddTransactionModal({
               </FormRow>
 
               <FormRow
-                icon={<ArrowUpDown color={colors.textMuted} size={20} />}
-                label={i18n.t('addTransaction.type')}>
-                <View style={styles.toggle}>
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => handleChangeType('expense')}
-                    style={[styles.toggleOption, type === 'expense' && styles.toggleOptionActive]}>
-                    <Text
-                      style={[styles.toggleText, type === 'expense' && styles.toggleTextExpense]}>
-                      {i18n.t('addTransaction.expense')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => handleChangeType('income')}
-                    style={[styles.toggleOption, type === 'income' && styles.toggleOptionActive]}>
-                    <Text style={[styles.toggleText, type === 'income' && styles.toggleTextIncome]}>
-                      {i18n.t('addTransaction.income')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </FormRow>
-
-              <FormRow
+                styles={styles}
+                colors={colors}
                 icon={<CircleDollarSign color={colors.textMuted} size={20} />}
                 label={i18n.t('addTransaction.currency')}
                 onPress={handleOpenCurrencyPicker}>
@@ -753,8 +927,14 @@ export default function AddTransactionModal({
               </FormRow>
 
               <FormRow
+                styles={styles}
+                colors={colors}
                 icon={<Wallet color={colors.textMuted} size={20} />}
-                label={i18n.t('addTransaction.asset')}
+                label={
+                  isTransfer
+                    ? i18n.t('addTransaction.fromAsset')
+                    : i18n.t('addTransaction.asset')
+                }
                 onPress={handleOpenAssetPicker}>
                 {selectedAsset ? (
                   <Text style={styles.rowText}>{formatAssetLabel(selectedAsset)}</Text>
@@ -763,22 +943,44 @@ export default function AddTransactionModal({
                 )}
               </FormRow>
 
-              <FormRow
-                icon={<Folder color={colors.textMuted} size={20} />}
-                label={i18n.t('addTransaction.category')}
-                onPress={handleOpenCategoryPicker}>
-                {selectedCategory ? (
-                  <Text style={styles.rowText}>
-                    {selectedCategory.icon} {selectedCategory.name}
-                  </Text>
-                ) : (
-                  <Text style={styles.rowPlaceholder}>
-                    {i18n.t('addTransaction.selectCategory')}
-                  </Text>
-                )}
-              </FormRow>
+              {/* A transfer books both sides of the entry; a spend has a category instead. */}
+              {isTransfer ? (
+                <FormRow
+                  styles={styles}
+                  colors={colors}
+                  icon={<Landmark color={colors.textMuted} size={20} />}
+                  label={i18n.t('addTransaction.toAsset')}
+                  onPress={handleOpenToAssetPicker}>
+                  {selectedToAsset ? (
+                    <Text style={styles.rowText}>{formatAssetLabel(selectedToAsset)}</Text>
+                  ) : (
+                    <Text style={styles.rowPlaceholder}>
+                      {i18n.t('addTransaction.selectToAsset')}
+                    </Text>
+                  )}
+                </FormRow>
+              ) : (
+                <FormRow
+                  styles={styles}
+                  colors={colors}
+                  icon={<Folder color={colors.textMuted} size={20} />}
+                  label={i18n.t('addTransaction.category')}
+                  onPress={handleOpenCategoryPicker}>
+                  {selectedCategory ? (
+                    <Text style={styles.rowText}>
+                      {selectedCategory.icon} {selectedCategory.name}
+                    </Text>
+                  ) : (
+                    <Text style={styles.rowPlaceholder}>
+                      {i18n.t('addTransaction.selectCategory')}
+                    </Text>
+                  )}
+                </FormRow>
+              )}
 
               <FormRow
+                styles={styles}
+                colors={colors}
                 icon={<Calendar color={colors.textMuted} size={20} />}
                 label={i18n.t('addTransaction.date')}
                 onPress={handleOpenDatePicker}
@@ -786,6 +988,75 @@ export default function AddTransactionModal({
                 <Text style={styles.rowText}>{formatDate(date)}</Text>
               </FormRow>
             </View>
+
+            {/* Tier two: which holding inside the brokerage this buys. Hidden for a
+                transfer into a plain account, where there is no asset to name. */}
+            {isInvestmentPurchase ? (
+              <View style={styles.holdingCard}>
+                <View style={styles.holdingHeader}>
+                  <TrendingUp color={colors.brandLight} size={18} />
+                  <Text style={styles.holdingTitle}>{i18n.t('addTransaction.holding')}</Text>
+                </View>
+
+                <View style={styles.holdingField}>
+                  <Text style={styles.holdingLabel}>{i18n.t('addTransaction.assetSymbol')}</Text>
+                  <TextInput
+                    style={styles.holdingInput}
+                    value={assetSymbol}
+                    onChangeText={setAssetSymbol}
+                    placeholder={i18n.t('addTransaction.assetSymbolPlaceholder')}
+                    placeholderTextColor={colors.placeholder}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                  />
+                </View>
+
+                {symbolSuggestions.length > 0 ? (
+                  <View style={styles.suggestions}>
+                    {symbolSuggestions.map((symbol) => (
+                      <TouchableOpacity
+                        key={symbol}
+                        activeOpacity={0.7}
+                        onPress={() => setAssetSymbol(symbol)}
+                        style={styles.suggestion}>
+                        <Text style={styles.suggestionText}>{symbol}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+
+                <View style={styles.holdingSplit}>
+                  <View style={[styles.holdingField, styles.holdingFieldHalf]}>
+                    <Text style={styles.holdingLabel}>{i18n.t('addTransaction.shares')}</Text>
+                    <TextInput
+                      style={styles.holdingInput}
+                      value={shares}
+                      onChangeText={(text) => setShares(sanitizeAmountInput(text))}
+                      placeholder="0"
+                      placeholderTextColor={colors.placeholder}
+                      keyboardType="decimal-pad"
+                      returnKeyType="done"
+                    />
+                  </View>
+
+                  <View style={[styles.holdingField, styles.holdingFieldHalf]}>
+                    <Text style={styles.holdingLabel}>{i18n.t('addTransaction.unitPrice')}</Text>
+                    <TextInput
+                      style={styles.holdingInput}
+                      value={unitPrice}
+                      onChangeText={(text) => setUnitPrice(sanitizeAmountInput(text))}
+                      placeholder="0,00"
+                      placeholderTextColor={colors.placeholder}
+                      keyboardType="decimal-pad"
+                      returnKeyType="done"
+                    />
+                  </View>
+                </View>
+
+                <Text style={styles.holdingHint}>{i18n.t('addTransaction.investmentHint')}</Text>
+              </View>
+            ) : null}
 
             {showDatePicker && (
               <View style={styles.card}>
@@ -811,7 +1082,7 @@ export default function AddTransactionModal({
             <View style={styles.aiCard}>
               <View style={styles.aiHeader}>
                 <View style={styles.aiIcon}>
-                  <Sparkles color={colors.onBrand} size={20} />
+                  <Sparkles color={colors.aiText} size={20} />
                 </View>
                 <View style={styles.aiTexts}>
                   <Text style={styles.aiLabel}>{i18n.t('addTransaction.addWithAI')}</Text>
@@ -870,7 +1141,8 @@ export default function AddTransactionModal({
                 <Text style={styles.confirmTitle}>{i18n.t('addTransaction.confirmTitle')}</Text>
                 <Text style={styles.confirmLine}>{pendingDraft.title}</Text>
                 <Text style={styles.confirmLine}>
-                  {formatMoney(pendingDraft.amount, currency)} · {pendingDraft.category.name}
+                  {formatMoney(pendingDraft.amount, currency)}
+                  {pendingDraft.category ? ` · ${pendingDraft.category.name}` : ''}
                 </Text>
                 {currency !== DEFAULT_CURRENCY && Number.isFinite(exchangeRate) ? (
                   <Text style={styles.confirmDate}>
@@ -884,6 +1156,12 @@ export default function AddTransactionModal({
                 ) : null}
                 {/* Guaranteed by validation, so it always names the account being charged. */}
                 <Text style={styles.confirmLine}>{formatAssetLabel(pendingDraft.asset)}</Text>
+                {pendingDraft.toAsset ? (
+                  <Text style={styles.confirmLine}>
+                    → {formatAssetLabel(pendingDraft.toAsset)}
+                    {pendingDraft.assetSymbol ? ` · ${pendingDraft.assetSymbol}` : ''}
+                  </Text>
+                ) : null}
                 <Text style={styles.confirmDate}>{formatDate(pendingDraft.date)}</Text>
                 <View style={styles.confirmActions}>
                   <TouchableOpacity
@@ -911,6 +1189,7 @@ export default function AddTransactionModal({
             categories={categories}
             selectedId={selectedCategory?.id}
             tab={categoryTab}
+            styles={styles}
             onChangeTab={setCategoryTab}
             onSelect={handleSelectCategory}
             onClose={() => setShowCategoryPicker(false)}
@@ -918,11 +1197,23 @@ export default function AddTransactionModal({
 
           <PickerModal
             visible={showAssetPicker}
-            title={i18n.t('addTransaction.assets')}
+            title={
+              isTransfer ? i18n.t('addTransaction.fromAsset') : i18n.t('addTransaction.assets')
+            }
             items={assets}
             selectedId={selectedAsset?.id}
             onSelect={handleSelectAsset}
             onClose={() => setShowAssetPicker(false)}
+          />
+
+          <PickerModal
+            visible={showToAssetPicker}
+            title={i18n.t('addTransaction.toAsset')}
+            // The money has to land somewhere else, so the source is not offered.
+            items={assets.filter((asset) => asset.id !== selectedAsset?.id)}
+            selectedId={selectedToAsset?.id}
+            onSelect={handleSelectToAsset}
+            onClose={() => setShowToAssetPicker(false)}
           />
 
           <PickerModal
@@ -939,305 +1230,353 @@ export default function AddTransactionModal({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerSide: {
-    flex: 1,
-    minHeight: TOUCH_TARGET,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  headerSideRight: {
-    alignItems: 'flex-end',
-  },
-  headerCancel: {
-    fontSize: 17,
-    color: colors.tint,
-  },
-  headerSave: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.tint,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  formError: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: 14,
-    color: colors.dangerText,
-    backgroundColor: colors.dangerSurface,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  amountSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xl,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  currency: {
-    fontSize: 32,
-    fontWeight: '600',
-  },
-  amountInput: {
-    fontSize: 56,
-    fontWeight: '700',
-    minWidth: 140,
-    textAlign: 'center',
-    padding: 0,
-  },
-  baseHint: {
-    minHeight: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  baseHintText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textMuted,
-  },
-  expense: {
-    color: colors.expense,
-  },
-  income: {
-    color: colors.income,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: TOUCH_TARGET,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  rowIcon: {
-    width: 24,
-    alignItems: 'center',
-  },
-  rowLabel: {
-    fontSize: 15,
-    color: colors.text,
-  },
-  rowValue: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  rowInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    textAlign: 'right',
-    padding: 0,
-  },
-  rowText: {
-    fontSize: 15,
-    color: colors.text,
-  },
-  rowPlaceholder: {
-    fontSize: 15,
-    color: colors.placeholder,
-  },
-  toggle: {
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    padding: 2,
-  },
-  toggleOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: radius.sm,
-  },
-  toggleOptionActive: {
-    backgroundColor: colors.surface,
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textMuted,
-  },
-  toggleTextExpense: {
-    color: colors.expense,
-  },
-  toggleTextIncome: {
-    color: colors.income,
-  },
-  pickerDone: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  pickerDoneText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.tint,
-  },
-  aiCard: {
-    gap: spacing.md,
-    backgroundColor: colors.brand,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  aiHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  aiIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brandLight,
-  },
-  aiTexts: {
-    flex: 1,
-    gap: 2,
-  },
-  aiLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.onBrand,
-  },
-  aiHint: {
-    fontSize: 13,
-    color: colors.brandSoft,
-  },
-  aiInput: {
-    minHeight: 64,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: spacing.md,
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.text,
-    textAlignVertical: 'top',
-  },
-  aiActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  aiMic: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 52,
-    minHeight: TOUCH_TARGET,
-    borderRadius: radius.md,
-    backgroundColor: colors.brandDark,
-    opacity: 0.9,
-  },
-  aiMicActive: {
-    backgroundColor: colors.danger,
-    opacity: 1,
-    transform: [{ scale: 1.08 }],
-  },
-  aiAction: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: TOUCH_TARGET,
-    borderRadius: radius.md,
-    backgroundColor: colors.brandDark,
-  },
-  aiActionDisabled: {
-    opacity: 0.6,
-  },
-  aiActionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.onBrand,
-  },
-  tabs: {
-    margin: spacing.lg,
-    marginBottom: 0,
-  },
-  confirmOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.overlay,
-  },
-  confirmCard: {
-    width: '100%',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    padding: 20,
-  },
-  confirmTitle: {
-    marginBottom: spacing.sm,
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  confirmLine: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  confirmDate: {
-    fontSize: 15,
-    color: colors.textMuted,
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.xl,
-    marginTop: spacing.lg,
-  },
-  confirmButton: {
-    minWidth: 64,
-    minHeight: 32,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  confirmCancel: {
-    fontSize: 17,
-    color: colors.tint,
-  },
-  confirmSave: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.tint,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 56,
+      paddingHorizontal: spacing.lg,
+      backgroundColor: colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerSide: {
+      flex: 1,
+      minHeight: TOUCH_TARGET,
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+    },
+    headerSideRight: {
+      alignItems: 'flex-end',
+    },
+    headerCancel: {
+      fontSize: 17,
+      color: colors.tint,
+    },
+    headerSave: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.tint,
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    formError: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      fontSize: 14,
+      color: colors.dangerText,
+      backgroundColor: colors.dangerSurface,
+    },
+    content: {
+      padding: spacing.lg,
+      gap: spacing.lg,
+    },
+    amountSection: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xl,
+    },
+    amountRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    currency: {
+      fontSize: 32,
+      fontWeight: '600',
+    },
+    amountInput: {
+      fontSize: 56,
+      fontWeight: '700',
+      minWidth: 140,
+      textAlign: 'center',
+      padding: 0,
+    },
+    baseHint: {
+      minHeight: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    baseHintText: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textMuted,
+    },
+    // A hairline glass edge reads as depth in dark mode, where a shadow alone
+    // disappears against the canvas.
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
+      paddingHorizontal: spacing.lg,
+    },
+    // The holding group is glass rather than solid, so it reads as a panel layered
+    // over the form instead of another row of it. No elevation: Android composites
+    // an elevated layer separately and would flatten the translucency to a block.
+    holdingCard: {
+      gap: spacing.md,
+      backgroundColor: colors.surfaceGlass,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.borderGlass,
+      padding: spacing.lg,
+    },
+    holdingHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    holdingTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+      color: colors.textMuted,
+    },
+    holdingField: {
+      gap: spacing.xs,
+    },
+    holdingSplit: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    holdingFieldHalf: {
+      flex: 1,
+    },
+    holdingLabel: {
+      fontSize: 13,
+      color: colors.textMuted,
+    },
+    holdingInput: {
+      minHeight: TOUCH_TARGET,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.md,
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    holdingHint: {
+      fontSize: 13,
+      color: colors.textMuted,
+    },
+    suggestions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginTop: -spacing.xs,
+    },
+    suggestion: {
+      paddingVertical: 6,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
+      backgroundColor: colors.brandSurface,
+    },
+    suggestionText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.brandLight,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: TOUCH_TARGET,
+      paddingVertical: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowLast: {
+      borderBottomWidth: 0,
+    },
+    rowIcon: {
+      width: 24,
+      alignItems: 'center',
+    },
+    rowLabel: {
+      fontSize: 15,
+      color: colors.text,
+    },
+    rowValue: {
+      flex: 1,
+      alignItems: 'flex-end',
+    },
+    rowInput: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.text,
+      textAlign: 'right',
+      padding: 0,
+    },
+    rowText: {
+      fontSize: 15,
+      color: colors.text,
+    },
+    rowPlaceholder: {
+      fontSize: 15,
+      color: colors.placeholder,
+    },
+    pickerDone: {
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    pickerDoneText: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.tint,
+    },
+    aiCard: {
+      gap: spacing.md,
+      backgroundColor: colors.aiSurface,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.aiBorder,
+      padding: spacing.lg,
+    },
+    aiHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    aiIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.brandLight,
+    },
+    aiTexts: {
+      flex: 1,
+      gap: 2,
+    },
+    aiLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.aiText,
+    },
+    aiHint: {
+      fontSize: 13,
+      color: colors.aiTextMuted,
+    },
+    aiInput: {
+      minHeight: 64,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 14,
+      paddingVertical: spacing.md,
+      fontSize: 15,
+      lineHeight: 20,
+      color: colors.text,
+      textAlignVertical: 'top',
+    },
+    aiActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    aiMic: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 52,
+      minHeight: TOUCH_TARGET,
+      borderRadius: radius.md,
+      backgroundColor: colors.aiSurfaceStrong,
+      opacity: 0.9,
+    },
+    aiMicActive: {
+      backgroundColor: colors.danger,
+      opacity: 1,
+      transform: [{ scale: 1.08 }],
+    },
+    aiAction: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: TOUCH_TARGET,
+      borderRadius: radius.md,
+      backgroundColor: colors.aiSurfaceStrong,
+    },
+    aiActionDisabled: {
+      opacity: 0.6,
+    },
+    aiActionText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.onBrand,
+    },
+    tabs: {
+      margin: spacing.lg,
+      marginBottom: 0,
+    },
+    confirmOverlay: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.xl,
+      backgroundColor: colors.overlay,
+    },
+    confirmCard: {
+      width: '100%',
+      gap: spacing.sm,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surfaceElevated,
+      padding: 20,
+    },
+    confirmTitle: {
+      marginBottom: spacing.sm,
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    confirmLine: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    confirmDate: {
+      fontSize: 15,
+      color: colors.textMuted,
+    },
+    confirmActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: spacing.xl,
+      marginTop: spacing.lg,
+    },
+    confirmButton: {
+      minWidth: 64,
+      minHeight: 32,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    },
+    confirmCancel: {
+      fontSize: 17,
+      color: colors.tint,
+    },
+    confirmSave: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.tint,
+    },
+  });
+}

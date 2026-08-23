@@ -7,7 +7,7 @@ import {
   resolveBrand,
   useAppStore,
 } from '@budgetaiapp/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,7 +23,8 @@ import {
   View,
 } from 'react-native';
 
-import { colors, radius, spacing, TOUCH_TARGET } from '../../theme';
+import { radius, spacing, TOUCH_TARGET } from '../../theme';
+import { useAppTheme, type ColorTokens } from '../../theming';
 import AccountColorPicker from './AccountColorPicker';
 import SegmentedControl from '../SegmentedControl';
 
@@ -85,6 +86,8 @@ export default function EntryEditor<T extends string>({
   onDelete,
   onCancel,
 }: EntryEditorProps<T>) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [name, setName] = useState(initial.name);
   const [icon, setIcon] = useState(
     isRemoteIcon(initial.icon) ? iconChoices[0] : initial.icon || iconChoices[0],
@@ -366,179 +369,182 @@ export default function EntryEditor<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerSide: {
-    flex: 1,
-    minHeight: TOUCH_TARGET,
-    justifyContent: 'center',
-  },
-  headerSideEnd: {
-    alignItems: 'flex-end',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  headerAction: {
-    fontSize: 17,
-    color: colors.tint,
-  },
-  headerActionStrong: {
-    fontWeight: '600',
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  previewWrap: {
-    alignSelf: 'center',
-  },
-  iconInput: {
-    width: 88,
-    height: 88,
-    fontSize: 40,
-    lineHeight: 48,
-    backgroundColor: colors.surface,
-    borderRadius: 44,
-  },
-  brandCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 6,
-  },
-  brandLogoWell: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  brandLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-  },
-  brandFallback: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  brandMeta: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: -spacing.sm,
-  },
-  brandTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  brandHint: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  brandLink: {
-    marginTop: spacing.xs,
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.tint,
-  },
-  iconHint: {
-    marginTop: -spacing.sm,
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-  },
-  iconChip: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: TOUCH_TARGET / 2,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    backgroundColor: colors.background,
-  },
-  iconChipSelected: {
-    borderColor: colors.tint,
-    backgroundColor: colors.brandSurface,
-  },
-  iconChipText: {
-    fontSize: 22,
-    lineHeight: 26,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: TOUCH_TARGET + 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowStacked: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  rowLabel: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  rowInput: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-    textAlign: 'right',
-  },
-  delete: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: TOUCH_TARGET + 8,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-  },
-  deleteText: {
-    fontSize: 16,
-    color: colors.dangerText,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 56,
+      paddingHorizontal: spacing.lg,
+      backgroundColor: colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerSide: {
+      flex: 1,
+      minHeight: TOUCH_TARGET,
+      justifyContent: 'center',
+    },
+    headerSideEnd: {
+      alignItems: 'flex-end',
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    headerAction: {
+      fontSize: 17,
+      color: colors.tint,
+    },
+    headerActionStrong: {
+      fontWeight: '600',
+    },
+    content: {
+      padding: spacing.lg,
+      gap: spacing.lg,
+    },
+    previewWrap: {
+      alignSelf: 'center',
+    },
+    iconInput: {
+      width: 88,
+      height: 88,
+      fontSize: 40,
+      lineHeight: 48,
+      color: colors.text,
+      backgroundColor: colors.surface,
+      borderRadius: 44,
+    },
+    brandCircle: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.18,
+      shadowRadius: 14,
+      elevation: 6,
+    },
+    brandLogoWell: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    },
+    brandLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+    },
+    brandFallback: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    brandMeta: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginTop: -spacing.sm,
+    },
+    brandTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    brandHint: {
+      fontSize: 13,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    brandLink: {
+      marginTop: spacing.xs,
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.tint,
+    },
+    iconHint: {
+      marginTop: -spacing.sm,
+      fontSize: 13,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    iconGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+    },
+    iconChip: {
+      width: TOUCH_TARGET,
+      height: TOUCH_TARGET,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: TOUCH_TARGET / 2,
+      borderWidth: 2,
+      borderColor: 'transparent',
+      backgroundColor: colors.background,
+    },
+    iconChipSelected: {
+      borderColor: colors.tint,
+      backgroundColor: colors.brandSurface,
+    },
+    iconChipText: {
+      fontSize: 22,
+      lineHeight: 26,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      paddingHorizontal: spacing.lg,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: TOUCH_TARGET + 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowStacked: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+    },
+    rowLast: {
+      borderBottomWidth: 0,
+    },
+    rowLabel: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    rowInput: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.text,
+      textAlign: 'right',
+    },
+    delete: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: TOUCH_TARGET + 8,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+    },
+    deleteText: {
+      fontSize: 16,
+      color: colors.dangerText,
+    },
+  });
+}

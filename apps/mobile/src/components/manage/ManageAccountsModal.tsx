@@ -20,7 +20,11 @@ import ManageEntriesModal, { ManageEntry } from './ManageEntriesModal';
 
 const ACCOUNT_ICONS = ['💳', '💵', '🏦', '💰', '🪙', '🏧', '💶', '💷', '📈', '🐷', '🧾', '📱'];
 
-/** Ticker-style short code the assets table requires alongside the display name. */
+/**
+ * Short code the assets table requires alongside the display name. It identifies
+ * the account itself — the holdings inside an investment account carry their own
+ * symbols, on the transactions that bought them.
+ */
 function toSymbol(name: string) {
   return name.replace(/\s+/g, '').toUpperCase().slice(0, 8);
 }
@@ -76,7 +80,8 @@ export default function ManageAccountsModal({
 
     return {
       name: draft.name,
-      // Investments carry a real ticker, so an edit must never overwrite it.
+      // An existing code is left alone, so renaming an account never churns the
+      // identifier its history was written against.
       symbol: existing?.symbol ?? toSymbol(draft.name),
       type: draft.type,
       icon: draft.icon,

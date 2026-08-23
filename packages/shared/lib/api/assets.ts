@@ -4,7 +4,11 @@ import type { Asset, AssetType, CurrencyCode } from '../../types/database';
 const COLUMNS =
   'id, name, symbol, type, icon, custom_color, sort_order, quantity, purchase_price, current_price, currency, created_at';
 
-/** The fields an account form owns. */
+/**
+ * The fields an account form owns. An account is a top-level container, so it
+ * carries no ticker of its own: the holdings inside an investment account are
+ * recorded on the transactions that bought them.
+ */
 export type AssetInput = {
   name: string;
   symbol: string;
@@ -82,15 +86,15 @@ export async function deleteAsset(id: string): Promise<void> {
 }
 
 /**
- * How many transactions are booked to this account.
- * `transactions.asset_id` is NOT NULL, so deleting an account that is still in
- * use fails deep in the database; callers check this first to say so plainly.
+ * How many transactions are booked to this account, on either side of a transfer.
+ * Both foreign keys block a delete deep in the database, so callers check this
+ * first to say so plainly.
  */
 export async function countAssetTransactions(id: string): Promise<number> {
   const { count, error } = await getSupabase()
     .from('transactions')
     .select('id', { count: 'exact', head: true })
-    .eq('asset_id', id);
+    .or(`asset_id.eq.${id},to_asset_id.eq.${id}`);
 
   if (error) {
     throw new Error(error.message);

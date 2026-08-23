@@ -1,4 +1,4 @@
-import { useCallback, type ReactElement } from 'react';
+import { useCallback, useMemo, type ReactElement } from 'react';
 import { type StyleProp, StyleSheet, type ViewStyle } from 'react-native';
 import RNReorderableList, {
   reorderItems,
@@ -7,28 +7,32 @@ import RNReorderableList, {
   type ReorderableListReorderEvent,
 } from 'react-native-reorderable-list';
 
-import { colors, radius } from '../../theme';
+import { radius } from '../../theme';
+import { useAppTheme, type ColorTokens } from '../../theming';
 
 export { useIsActive, useReorderableDrag } from 'react-native-reorderable-list';
 export type { ReorderableListRenderItemInfo };
 
 /**
  * Applied by the library to the dragged cell only, so the row reads as a card
- * lifted off the list while it travels.
+ * lifted off the list while it travels. A static light-only fill would flash
+ * white mid-drag in dark mode, so this is built from the live theme.
  */
-const LIFTED_CELL: ReorderableListCellAnimations = {
-  // Depth is carried by scale and shadow, so the row can stay fully legible.
-  opacity: 1,
-  transform: [{ scale: 1.03 }],
-  // An opaque surface is what the shadow, and Android's elevation, is cast from.
-  backgroundColor: colors.surface,
-  borderRadius: radius.md,
-  shadowColor: colors.text,
-  shadowOffset: { width: 0, height: 8 },
-  shadowRadius: 16,
-  shadowOpacity: 0.18,
-  elevation: 12,
-};
+function liftedCell(colors: ColorTokens): ReorderableListCellAnimations {
+  return {
+    // Depth is carried by scale and shadow, so the row can stay fully legible.
+    opacity: 1,
+    transform: [{ scale: 1.03 }],
+    // An opaque surface is what the shadow, and Android's elevation, is cast from.
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.md,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
+    shadowOpacity: 0.18,
+    elevation: 12,
+  };
+}
 
 type ReorderableListProps<T extends { id: string }> = {
   data: T[];
@@ -56,6 +60,8 @@ export default function ReorderableList<T extends { id: string }>({
   contentContainerStyle,
   style,
 }: ReorderableListProps<T>) {
+  const { colors } = useAppTheme();
+  const cellAnimations = useMemo(() => liftedCell(colors), [colors]);
   const handleReorder = useCallback(
     ({ from, to }: ReorderableListReorderEvent) => onReorder(reorderItems(data, from, to)),
     [data, onReorder],
@@ -67,7 +73,7 @@ export default function ReorderableList<T extends { id: string }>({
       keyExtractor={keyExtractor}
       renderItem={renderItem}
       onReorder={handleReorder}
-      cellAnimations={LIFTED_CELL}
+      cellAnimations={cellAnimations}
       // Lets rows read their own drag state through `useIsActive`.
       shouldUpdateActiveItem
       autoscrollThreshold={0.15}

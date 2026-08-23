@@ -1,8 +1,8 @@
 import {
   CategoryInput,
+  CategoryType,
   countCategoryTransactions,
   i18n,
-  TransactionType,
   useCategories,
   useCreateCategoryMutation,
   useDeleteCategoryMutation,
@@ -11,7 +11,7 @@ import {
 } from '@budgetaiapp/shared';
 import { Alert } from 'react-native';
 
-import { transactionTypeOptions } from '../../lib/labels';
+import { categoryTypeOptions } from '../../lib/labels';
 import { EntryDraft } from './EntryEditor';
 import ManageEntriesModal, { ManageEntry } from './ManageEntriesModal';
 
@@ -35,7 +35,7 @@ export default function ManageCategoriesModal({
   const updateCategoryMutation = useUpdateCategoryMutation();
   const deleteCategoryMutation = useDeleteCategoryMutation();
 
-  const entries: ManageEntry<TransactionType>[] = categories.map((category) => ({
+  const entries: ManageEntry<CategoryType>[] = categories.map((category) => ({
     id: category.id,
     name: category.name,
     icon: category.icon,
@@ -45,7 +45,7 @@ export default function ManageCategoriesModal({
     }),
   }));
 
-  const toInput = (draft: EntryDraft<TransactionType>): CategoryInput => ({
+  const toInput = (draft: EntryDraft<CategoryType>): CategoryInput => ({
     name: draft.name,
     type: draft.type,
     icon: draft.icon,
@@ -56,7 +56,7 @@ export default function ManageCategoriesModal({
       visible={visible}
       title={i18n.t('manage.categories')}
       entries={entries}
-      typeOptions={transactionTypeOptions()}
+      typeOptions={categoryTypeOptions()}
       iconChoices={CATEGORY_ICONS}
       filterable
       addLabel={i18n.t('manage.addCategory')}

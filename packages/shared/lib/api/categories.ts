@@ -1,12 +1,12 @@
 import { getSupabase } from '../supabase';
-import type { Category, TransactionType } from '../../types/database';
+import type { Category, CategoryType } from '../../types/database';
 
 const COLUMNS = 'id, name, icon, type, created_at';
 
 /** The fields a category form owns. */
 export type CategoryInput = {
   name: string;
-  type: TransactionType;
+  type: CategoryType;
   icon: string;
 };
 

@@ -19,7 +19,8 @@ import ReorderableList, {
   useReorderableDrag,
   type ReorderableListRenderItemInfo,
 } from '../reorder/ReorderableList';
-import { colors, radius, spacing, TOUCH_TARGET } from '../../theme';
+import { radius, spacing, TOUCH_TARGET } from '../../theme';
+import { useAppTheme, type ColorTokens } from '../../theming';
 import SegmentedControl from '../SegmentedControl';
 import EntryEditor, { EntryDraft } from './EntryEditor';
 
@@ -60,7 +61,9 @@ type ManageEntriesModalProps<T extends string> = {
 
 const NEW_ENTRY = 'new' as const;
 
-function EntryRowIcon({ icon }: { icon: string | null }) {
+type ManageStyles = ReturnType<typeof createStyles>;
+
+function EntryRowIcon({ icon, styles }: { icon: string | null; styles: ManageStyles }) {
   if (icon && isRemoteIcon(icon)) {
     return <Image source={{ uri: icon }} style={styles.rowIconImage} />;
   }
@@ -76,6 +79,8 @@ type EntryRowProps<T extends string> = {
   onPress: (entry: ManageEntry<T>) => void;
   /** Supplying this swaps the chevron for a drag handle. */
   onDragStart?: () => void;
+  colors: ColorTokens;
+  styles: ManageStyles;
 };
 
 function EntryRowBase<T extends string>({
@@ -84,6 +89,8 @@ function EntryRowBase<T extends string>({
   isActive = false,
   onPress,
   onDragStart,
+  colors,
+  styles,
 }: EntryRowProps<T>) {
   return (
     <View style={[styles.row, showDivider && !isActive && styles.rowDivided]}>
@@ -92,7 +99,7 @@ function EntryRowBase<T extends string>({
         onPress={() => onPress(entry)}
         disabled={isActive}
         style={styles.rowMain}>
-        <EntryRowIcon icon={entry.icon} />
+        <EntryRowIcon icon={entry.icon} styles={styles} />
         <View style={styles.rowText}>
           <Text style={[styles.rowName, isActive && styles.rowNameActive]} numberOfLines={1}>
             {entry.name}
@@ -125,7 +132,7 @@ const EntryRow = memo(EntryRowBase) as typeof EntryRowBase;
 
 /** Reads its own drag state from the list, so a drag re-renders one row instead of all. */
 function ReorderableEntryRow<T extends string>(
-  props: Pick<EntryRowProps<T>, 'entry' | 'showDivider' | 'onPress'>,
+  props: Pick<EntryRowProps<T>, 'entry' | 'showDivider' | 'onPress' | 'colors' | 'styles'>,
 ) {
   const isActive = useIsActive();
   const drag = useReorderableDrag();
@@ -152,6 +159,8 @@ export default function ManageEntriesModal<T extends string>({
   onReorder,
   onClose,
 }: ManageEntriesModalProps<T>) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [filter, setFilter] = useState<T>(typeOptions[0].id);
   const [target, setTarget] = useState<ManageEntry<T> | typeof NEW_ENTRY | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -226,9 +235,15 @@ export default function ManageEntriesModal<T extends string>({
 
   const renderRow = useCallback(
     ({ item, index }: ReorderableListRenderItemInfo<ManageEntry<T>>) => (
-      <ReorderableEntryRow entry={item} showDivider={index > 0} onPress={setTarget} />
+      <ReorderableEntryRow
+        entry={item}
+        showDivider={index > 0}
+        onPress={setTarget}
+        colors={colors}
+        styles={styles}
+      />
     ),
-    [],
+    [colors, styles],
   );
 
   return (
@@ -304,6 +319,8 @@ export default function ManageEntriesModal<T extends string>({
                         entry={entry}
                         showDivider={index > 0}
                         onPress={setTarget}
+                        colors={colors}
+                        styles={styles}
                       />
                     ))}
                   </View>
@@ -328,125 +345,138 @@ export default function ManageEntriesModal<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  gestureRoot: {
-    flex: 1,
-  },
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerSide: {
-    flex: 1,
-    minHeight: TOUCH_TARGET,
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  filter: {
-    margin: spacing.lg,
-    marginBottom: 0,
-  },
-  listArea: {
-    flex: 1,
-    padding: spacing.lg,
-  },
-  content: {
-    padding: spacing.lg,
-  },
-  empty: {
-    marginTop: spacing.xl,
-    fontSize: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  card: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: TOUCH_TARGET + 12,
-  },
-  rowDivided: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  rowNameActive: {
-    fontWeight: '600',
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: TOUCH_TARGET + 12,
-  },
-  dragHandle: {
-    minWidth: TOUCH_TARGET,
-    minHeight: TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.sm,
-  },
-  dragHandleActive: {
-    backgroundColor: colors.brandSurface,
-  },
-  rowIcon: {
-    width: 28,
-    fontSize: 20,
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  rowIconImage: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-  },
-  rowText: {
-    flex: 1,
-    gap: 2,
-  },
-  rowName: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  rowSubtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  footer: {
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: TOUCH_TARGET + 6,
-    backgroundColor: colors.tint,
-    borderRadius: radius.lg,
-  },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.onBrand,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    gestureRoot: {
+      flex: 1,
+    },
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 56,
+      paddingHorizontal: spacing.lg,
+      backgroundColor: colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerSide: {
+      flex: 1,
+      minHeight: TOUCH_TARGET,
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    filter: {
+      margin: spacing.lg,
+      marginBottom: 0,
+    },
+    listArea: {
+      flex: 1,
+      padding: spacing.lg,
+    },
+    content: {
+      padding: spacing.lg,
+    },
+    empty: {
+      marginTop: spacing.xl,
+      fontSize: 15,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    // A hairline glass edge stands in for the shadow the flat light-mode card used,
+    // which disappears against a dark canvas.
+    card: {
+      flex: 1,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
+      paddingHorizontal: spacing.lg,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: TOUCH_TARGET + 12,
+    },
+    rowDivided: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    rowNameActive: {
+      fontWeight: '600',
+    },
+    rowMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: TOUCH_TARGET + 12,
+    },
+    dragHandle: {
+      minWidth: TOUCH_TARGET,
+      minHeight: TOUCH_TARGET,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.sm,
+    },
+    dragHandleActive: {
+      backgroundColor: colors.brandSurface,
+    },
+    rowIcon: {
+      width: 28,
+      fontSize: 20,
+      lineHeight: 24,
+      textAlign: 'center',
+    },
+    rowIconImage: {
+      width: 28,
+      height: 28,
+      borderRadius: 6,
+    },
+    rowText: {
+      flex: 1,
+      gap: 2,
+    },
+    rowName: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    rowSubtitle: {
+      fontSize: 13,
+      color: colors.textMuted,
+    },
+    footer: {
+      padding: spacing.lg,
+      paddingTop: spacing.sm,
+    },
+    // `brand` rather than `tint`: a saturated indigo reads as a deliberate,
+    // premium call to action in both modes instead of the flatter system blue.
+    addButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      minHeight: TOUCH_TARGET + 6,
+      backgroundColor: colors.brand,
+      borderRadius: radius.lg,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.16,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+    addButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.onBrand,
+    },
+  });
+}

@@ -8,8 +8,11 @@
 - CRITICAL: Never remove existing features or simplify working logic during a refactor unless explicitly instructed.
 
 2. TECHNOLOGY STACK
-- Frontend: React Native (Expo), TypeScript.
+- Frontend: React Native (Expo), TypeScript, Next.js.
 - Navigation: Expo Router (Tabs and Stack architecture).
+- State Management & Fetching: Zustand (Client State) and TanStack Query (Server State/Caching).
+- Theming & UI: Dynamic Theme System (Dark / Light / Auto mode support using semantic color tokens).
+- UI/Animations: react-native-reanimated and react-native-gesture-handler (strictly 60FPS native animations).
 - Icons: Lucide Icons.
 - Backend/Database: Supabase.
 
@@ -18,11 +21,15 @@
 - Do NOT add `.limit()` to Supabase queries unless explicitly asked.
 - Always maintain secondary sorting (e.g., sort by `date` DESC, then by `created_at` DESC) to prevent timeline bugs.
 - Financial data must strictly adhere to the Multi-Currency and Asset structure (always link to `assets` table and use fixed `exchange_rate`).
+- ECONOMIC LOGIC (@econ): Strictly adhere to double-entry bookkeeping. Money moved between personal accounts or to investments must be categorized as a `transfer`, NEVER as `income` or `expense`. Transfers use `accountId` (from) and `toAccountId` (to) to preserve accurate Net Cash Flow.
 
-4. UI & DESIGN INTEGRITY
-- Never replace database-driven UI elements (like category emojis/icons) with generic placeholders (e.g., simple arrows).
-- Strictly follow a premium, minimalist, iOS-like SaaS design language (generous spacing, SafeAreaView respect, clean typography).
+4. UI & DESIGN INTEGRITY (@design)
+- Premium Adaptive Fintech Aesthetic: Inspired by modern card layouts, clear visual hierarchies, and polished UI structures seen in Revolut and Apple Wallet, fully adaptable across Dark, Light, and System (Auto) modes.
+- Semantic Theming: NEVER hardcode surface or text colors (e.g., avoid hardcoded `#ffffff` or `#000000`). Always use theme-aware tokens/props for backgrounds, borders, card surfaces, and high-contrast text.
+- Form factor & Polish: Use elegant border-radius, clean dividers, proper SafeAreaView margins, and subtle adaptive shadows/elevations that look natural in both light and dark modes.
+- Never replace database-driven UI elements (like category emojis/dynamic bank logos) with generic placeholders.
 
 5. CORE FEATURES
-- The Gemini AI / Vision parsing logic is the core product value. Never alter, mock, or simplify this integration.
+- The Gemini AI / Vision parsing logic is the core product value. Never alter, mock, or simplify this integration. 
+- Voice input uses a Push-to-Talk (onPressIn/onPressOut) mechanic. Keep this UX intact.
 - Implement a robust multi-language (i18n) supported architecture.

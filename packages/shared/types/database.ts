@@ -4,15 +4,35 @@ export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'TRY';
 // `exchange_rate` converts them into this one for balances and reports.
 export const DEFAULT_CURRENCY: CurrencyCode = 'EUR';
 
-export type TransactionType = 'income' | 'expense';
+// `transfer` moves money between the user's own accounts. It is deliberately
+// neither income nor expense, so net cash flow stays accurate.
+export type TransactionType = 'income' | 'expense' | 'transfer';
 
-// Investment holdings and spending accounts share the `assets` table.
-export type AssetType = 'stock' | 'etf' | 'crypto' | 'commodity' | 'cash' | 'card' | 'bank';
+// Transfers are never categorised, so a category only ever describes one of the
+// two spending sides.
+export type CategoryType = Exclude<TransactionType, 'transfer'>;
+
+/**
+ * Tier one of the investment model: a top-level place money sits, never an
+ * individual holding. An S&P 500 ETF is not an account — it is a holding inside
+ * an `investment` (brokerage) account, recorded on the transactions that bought
+ * it. The single-asset kinds below are retained only so historical rows written
+ * under the old model still read back.
+ */
+export type AssetType =
+  | 'stock'
+  | 'etf'
+  | 'crypto'
+  | 'commodity'
+  | 'cash'
+  | 'card'
+  | 'bank'
+  | 'investment';
 
 export interface Category {
   id: string;
   name: string;
-  type: TransactionType;
+  type: CategoryType;
   icon: string | null;
   created_at: string;
 }
@@ -27,9 +47,22 @@ export interface Transaction {
   // base_amount = amount * exchange_rate. Same-currency rows use 1.
   exchange_rate: number;
   type: TransactionType;
+  // Null on a transfer, which moves money rather than spending it.
   category_id: string | null;
-  // The account the money moved through. Required, enforced by a NOT NULL column.
+  // The account the money moved through — the debited side of a transfer.
+  // Required, enforced by a NOT NULL column.
   asset_id: string;
+  // The credited side of a transfer. Null for income and expense.
+  to_asset_id: string | null;
+  // Tier two of the investment model: which holding inside the destination
+  // account this transfer bought, as a market symbol such as `VUSA.AS` or `BTC`.
+  // Null for plain cash movements.
+  asset_symbol: string | null;
+  // Units acquired, so a holding can be tracked across many purchases at
+  // different prices rather than as a single lump.
+  shares: number | null;
+  // Price paid per unit, in `currency`. Pairs with `shares`.
+  unit_price: number | null;
   // Calendar day as YYYY-MM-DD, without a time or timezone.
   date: string;
   notes: string | null;

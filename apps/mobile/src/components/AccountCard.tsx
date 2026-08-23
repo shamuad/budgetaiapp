@@ -8,7 +8,7 @@ import {
   resolveBrand,
 } from '@budgetaiapp/shared';
 import { Wallet } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -18,7 +18,8 @@ import {
   View,
 } from 'react-native';
 
-import { colors, spacing } from '../theme';
+import { spacing } from '../theme';
+import { useAppTheme, type ColorTokens } from '../theming';
 
 type AccountCardProps = {
   asset: Asset;
@@ -35,6 +36,8 @@ export default function AccountCard({
   isDimmed,
   onPress,
 }: AccountCardProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const brand = resolveBrand(asset.name);
   const backgroundColor = getAccountCardColor(asset);
   const faviconUri = isRemoteIcon(asset.icon)
@@ -112,87 +115,91 @@ export default function AccountCard({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    width: 200,
-    height: 126,
-    borderRadius: 18,
-    padding: spacing.lg,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  cardFocused: {
-    borderColor: 'rgba(255, 255, 255, 0.55)',
-    shadowOpacity: 0.32,
-    shadowRadius: 22,
-    elevation: 12,
-  },
-  sheen: {
-    position: 'absolute',
-    top: -48,
-    right: -32,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  chip: {
-    position: 'absolute',
-    top: spacing.lg + 28,
-    left: spacing.lg,
-    width: 34,
-    height: 24,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  institution: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-    color: colors.onBrand,
-  },
-  brandMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-  },
-  favicon: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-  },
-  bottomRow: {
-    gap: 2,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.4,
-    color: 'rgba(255, 255, 255, 0.72)',
-  },
-  balance: {
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    color: colors.onBrand,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    card: {
+      width: 200,
+      height: 126,
+      borderRadius: 18,
+      padding: spacing.lg,
+      justifyContent: 'space-between',
+      overflow: 'hidden',
+      borderWidth: 1.5,
+      // Deliberately literal: a translucent white chrome that reads correctly
+      // over any brand/custom card color, in either app theme.
+      borderColor: 'rgba(255, 255, 255, 0.12)',
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.22,
+      shadowRadius: 18,
+      elevation: 8,
+    },
+    cardFocused: {
+      borderColor: 'rgba(255, 255, 255, 0.55)',
+      shadowOpacity: 0.32,
+      shadowRadius: 22,
+      elevation: 12,
+    },
+    sheen: {
+      position: 'absolute',
+      top: -48,
+      right: -32,
+      width: 140,
+      height: 140,
+      borderRadius: 70,
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    },
+    chip: {
+      position: 'absolute',
+      top: spacing.lg + 28,
+      left: spacing.lg,
+      width: 34,
+      height: 24,
+      borderRadius: 5,
+      backgroundColor: 'rgba(255, 255, 255, 0.28)',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255, 255, 255, 0.35)',
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    institution: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '600',
+      letterSpacing: 0.2,
+      color: colors.onBrand,
+    },
+    brandMark: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    },
+    favicon: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+    },
+    bottomRow: {
+      gap: 2,
+    },
+    label: {
+      fontSize: 11,
+      fontWeight: '500',
+      letterSpacing: 0.4,
+      color: 'rgba(255, 255, 255, 0.72)',
+    },
+    balance: {
+      fontSize: 20,
+      fontWeight: '700',
+      letterSpacing: -0.4,
+      color: colors.onBrand,
+    },
+  });
+}

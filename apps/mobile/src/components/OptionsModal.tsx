@@ -1,10 +1,11 @@
 import { i18n, useDeleteAllTransactionsMutation, useTransactionsQuery } from '@budgetaiapp/shared';
 import { ChevronRight, Folder, Trash2, Wallet } from 'lucide-react-native';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
+import { radius, spacing, TOUCH_TARGET } from '../theme';
+import { useAppTheme, type ColorTokens } from '../theming';
 import ManageAccountsModal from './manage/ManageAccountsModal';
 import ManageCategoriesModal from './manage/ManageCategoriesModal';
 
@@ -19,6 +20,8 @@ type OptionsModalProps = {
  * only one modal is ever presented at a time and closing one steps back here.
  */
 export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { transactions } = useTransactionsQuery();
   const clearDataMutation = useDeleteAllTransactionsMutation();
   const [destination, setDestination] = useState<'accounts' | 'categories' | null>(null);
@@ -61,16 +64,22 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
 
               <View style={styles.card}>
                 <OptionRow
+                  colors={colors}
+                  styles={styles}
                   icon={<Wallet color={colors.tint} size={20} />}
                   label={i18n.t('settings.manageAccounts')}
                   onPress={() => setDestination('accounts')}
                 />
                 <OptionRow
+                  colors={colors}
+                  styles={styles}
                   icon={<Folder color={colors.tint} size={20} />}
                   label={i18n.t('settings.manageCategories')}
                   onPress={() => setDestination('categories')}
                 />
                 <OptionRow
+                  colors={colors}
+                  styles={styles}
                   icon={<Trash2 color={colors.danger} size={20} />}
                   label={i18n.t('settings.clearData')}
                   onPress={confirmClearData}
@@ -100,16 +109,29 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
   );
 }
 
+type SheetStyles = ReturnType<typeof createStyles>;
+
 type OptionRowProps = {
   icon: ReactNode;
   label: string;
   onPress: () => void;
+  colors: ColorTokens;
+  styles: SheetStyles;
   isDestructive?: boolean;
   isDisabled?: boolean;
   isLast?: boolean;
 };
 
-function OptionRow({ icon, label, onPress, isDestructive, isDisabled, isLast }: OptionRowProps) {
+function OptionRow({
+  icon,
+  label,
+  onPress,
+  colors,
+  styles,
+  isDestructive,
+  isDisabled,
+  isLast,
+}: OptionRowProps) {
   return (
     <TouchableOpacity
       activeOpacity={0.6}
@@ -123,72 +145,79 @@ function OptionRow({ icon, label, onPress, isDestructive, isDisabled, isLast }: 
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 36,
-    height: 5,
-    marginTop: spacing.sm,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-  },
-  title: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: TOUCH_TARGET + 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  rowDisabled: {
-    opacity: 0.4,
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-  },
-  rowLabelDestructive: {
-    color: colors.dangerText,
-  },
-  cancel: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: TOUCH_TARGET + 8,
-    marginTop: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.tint,
-  },
-});
+function createStyles(colors: ColorTokens) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: colors.overlay,
+    },
+    // The sheet itself sits a shade above the canvas in dark mode (`surface`
+    // rather than `background`), so it reads as a raised layer instead of a
+    // continuation of whatever screen it was opened over.
+    sheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: radius.lg,
+      borderTopRightRadius: radius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    grabber: {
+      alignSelf: 'center',
+      width: 36,
+      height: 5,
+      marginTop: spacing.sm,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+    },
+    title: {
+      marginTop: spacing.lg,
+      marginBottom: spacing.md,
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textMuted,
+    },
+    card: {
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
+      paddingHorizontal: spacing.lg,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: TOUCH_TARGET + 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowLast: {
+      borderBottomWidth: 0,
+    },
+    rowDisabled: {
+      opacity: 0.4,
+    },
+    rowLabel: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.text,
+    },
+    rowLabelDestructive: {
+      color: colors.dangerText,
+    },
+    cancel: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: TOUCH_TARGET + 8,
+      marginTop: spacing.md,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.lg,
+    },
+    cancelText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.tint,
+    },
+  });
+}
