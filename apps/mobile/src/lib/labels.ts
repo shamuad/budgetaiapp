@@ -29,3 +29,15 @@ export function accountTypeOptions(): { id: AssetType; label: string }[] {
 export function accountTypeLabel(type: AssetType): string {
   return ACCOUNT_TYPES.includes(type) ? i18n.t(`accountTypes.${type}`) : type;
 }
+
+/** The four zoom levels the Analytics screen can page through. */
+export type AnalyticsTimeframe = 'day' | 'week' | 'month' | 'year';
+
+export function analyticsTimeframeOptions(): { id: AnalyticsTimeframe; label: string }[] {
+  return [
+    { id: 'day', label: i18n.t('analytics.timeframeDay') },
+    { id: 'week', label: i18n.t('analytics.timeframeWeek') },
+    { id: 'month', label: i18n.t('analytics.timeframeMonth') },
+    { id: 'year', label: i18n.t('analytics.timeframeYear') },
+  ];
+}

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, ReceiptText, User } from 'lucide-react-native';
+import { ChartPie, LayoutDashboard, ReceiptText, User } from 'lucide-react-native';
 
 import { i18n } from '@budgetaiapp/shared';
 
@@ -23,6 +23,13 @@ export default function TabsLayout() {
         options={{
           title: i18n.t('tabs.dashboard'),
           tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: i18n.t('tabs.analytics'),
+          tabBarIcon: ({ color, size }) => <ChartPie color={color} size={size} />,
         }}
       />
       <Tabs.Screen

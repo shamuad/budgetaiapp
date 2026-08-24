@@ -99,12 +99,14 @@ type SettingsRowProps = {
   label: string;
   hint?: string;
   isLast?: boolean;
+  /** Turns the row into a navigable link, e.g. to a sub-screen. */
+  onPress?: () => void;
   children: ReactNode;
 };
 
 /** One labeled row inside the glass settings card; `children` is the row's control. */
-function SettingsRow({ icon, styles, label, hint, isLast, children }: SettingsRowProps) {
-  return (
+function SettingsRow({ icon, styles, label, hint, isLast, onPress, children }: SettingsRowProps) {
+  const content = (
     <View style={[styles.row, isLast && styles.rowLast]}>
       <View style={styles.rowHeader}>
         {icon}
@@ -116,6 +118,16 @@ function SettingsRow({ icon, styles, label, hint, isLast, children }: SettingsRo
       {children}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.6} onPress={onPress}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
 }
 
 function createStyles(colors: ColorTokens) {

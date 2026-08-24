@@ -26,6 +26,10 @@ const DETERMINISTIC_CONFIG = {
 
 export type AIAction = 'save' | 'cancel' | 'none';
 
+// A generous ceiling for a monthly installment plan (5 years), so a garbled
+// model response can never blow up into an absurd number of written rows.
+export const MAX_INSTALLMENTS = 60;
+
 export type TransactionValues = {
   title: string;
   amount: number;
@@ -43,6 +47,9 @@ export type TransactionValues = {
   unitPrice: number | null;
   // Null when no currency was mentioned, which leaves the current selection alone.
   currency: CurrencyCode | null;
+  // How many equal monthly payments to split this into. 1 means a normal,
+  // one-off transaction — never set on a transfer, which is not a spend to split.
+  installments: number;
 };
 
 export type AIResult = {
@@ -115,7 +122,7 @@ export function buildTransactionPrompt(
   return [
     'You are a financial assistant. Extract the transaction details from the user.',
     'Respond ONLY with a JSON object shaped like:',
-    '{"title": string, "amount": number, "type": "expense" | "income" | "transfer", "category": string | null, "account_name": string | null, "to_account_name": string | null, "asset_symbol": string | null, "shares": number | null, "unit_price": number | null, "currency": "EUR" | "USD" | "GBP" | "TRY" | null, "date": "YYYY-MM-DD", "action": "save" | "cancel" | "none"}',
+    '{"title": string, "amount": number, "type": "expense" | "income" | "transfer", "category": string | null, "account_name": string | null, "to_account_name": string | null, "asset_symbol": string | null, "shares": number | null, "unit_price": number | null, "currency": "EUR" | "USD" | "GBP" | "TRY" | null, "installments": number, "date": "YYYY-MM-DD", "action": "save" | "cancel" | "none"}',
     '"amount" must be a JSON number (never a string) with a dot as the decimal separator, in major currency units.',
     'Examples: forty-two euros -> 42 or 42.5, never 4200; one thousand -> 1000.',
     '"currency" must be one of "EUR", "USD", "GBP", "TRY", or null.',
@@ -141,6 +148,10 @@ export function buildTransactionPrompt(
     'units they bought or the price per unit. Use null for anything they did not say.',
     'Moving money between two of the user\'s own accounts is also a "transfer".',
     'For "expense" and "income", leave "to_account_name", "asset_symbol", "shares" and "unit_price" null.',
+    '"installments" is how many equal monthly payments to split "amount" into.',
+    'Set it when the user mentions paying in installments (e.g. "3 taksit", "taksitli",',
+    '"in 6 installments", "split over 12 months", "pay it in 4"). Otherwise set it to 1.',
+    'A transfer is never split into installments, so always set it to 1 for a "transfer".',
     `Today is ${toISODate(today)} (${weekday}). Resolve relative dates such as "yesterday" or "last friday" against it.`,
     'If the user does not mention a date, use today.',
     'Set "action" to "save" only when the user explicitly asks to save or record it,',
@@ -229,6 +240,17 @@ function parsePositiveNumber(value: unknown): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+/** A whole number of payments, clamped to a sane range. Anything unusable is a single payment. */
+function parseInstallmentsCount(value: unknown): number {
+  const parsed = parseAIAmount(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 1) {
+    return 1;
+  }
+
+  return Math.min(MAX_INSTALLMENTS, Math.round(parsed));
+}
+
 const SUPPORTED_CURRENCIES: CurrencyCode[] = ['EUR', 'USD', 'GBP', 'TRY'];
 
 /** Maps model output and spoken aliases to a supported ISO currency code. */
@@ -294,6 +316,7 @@ export function parseTransactionResponse(
     shares?: number | string | null;
     unit_price?: number | string | null;
     currency?: string | null;
+    installments?: number | string | null;
     date?: string;
     action?: string;
   };
@@ -327,6 +350,8 @@ export function parseTransactionResponse(
   const toAsset = type === 'transfer' ? findTransferTarget(assets, parsed.to_account_name) : null;
   const assetSymbol = type === 'transfer' ? normalizeAssetSymbol(parsed.asset_symbol) : null;
   const currency = normalizeCurrency(parsed.currency);
+  // A transfer moves money rather than spending it, so it is never split.
+  const installments = type === 'transfer' ? 1 : parseInstallmentsCount(parsed.installments);
   const date = (parsed.date ? fromISODate(parsed.date) : null) ?? fallbackDate;
 
   return {
@@ -343,6 +368,7 @@ export function parseTransactionResponse(
       shares: type === 'transfer' ? parsePositiveNumber(parsed.shares) : null,
       unitPrice: type === 'transfer' ? parsePositiveNumber(parsed.unit_price) : null,
       currency,
+      installments,
     },
   };
 }

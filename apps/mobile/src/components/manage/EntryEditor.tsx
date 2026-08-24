@@ -39,6 +39,8 @@ type EntryEditorProps<T extends string> = {
   title: string;
   /** Values to start from: an existing row when editing, blanks when creating. */
   initial: EntryDraft<T>;
+  /** The row's original icon, if known — shows a "Reset to default" link once it's been changed. */
+  defaultIcon?: string | null;
   typeOptions: { id: T; label: string }[];
   /** Emoji offered by the picker. The first one stands in for a blank icon. */
   iconChoices: string[];
@@ -48,6 +50,8 @@ type EntryEditorProps<T extends string> = {
   onSave: (draft: EntryDraft<T>) => void;
   /** Omitted while creating, since there is nothing to remove yet. */
   onDelete?: () => void;
+  /** Overrides the bottom button's label — e.g. "Hide" instead of "Delete" for a soft-deletable row. */
+  deleteLabel?: string;
   onCancel: () => void;
 };
 
@@ -78,12 +82,14 @@ function initialManualIcon(name: string, icon: string, enabled: boolean): boolea
 export default function EntryEditor<T extends string>({
   title,
   initial,
+  defaultIcon,
   typeOptions,
   iconChoices,
   enableBrandDetect = false,
   isSaving,
   onSave,
   onDelete,
+  deleteLabel,
   onCancel,
 }: EntryEditorProps<T>) {
   const { colors } = useAppTheme();
@@ -205,6 +211,14 @@ export default function EntryEditor<T extends string>({
     animatePreviewSwap(() => setDetectedBrand(null));
   };
 
+  const canResetIcon = Boolean(defaultIcon) && icon !== defaultIcon;
+
+  const handleResetIcon = () => {
+    setManualIcon(true);
+    setIcon(defaultIcon!);
+    animatePreviewSwap(() => setDetectedBrand(null));
+  };
+
   useEffect(() => {
     setLogoFailed(false);
   }, [detectedBrand?.domain]);
@@ -313,6 +327,12 @@ export default function EntryEditor<T extends string>({
             <>
               <Text style={styles.iconHint}>{i18n.t('manage.iconHint')}</Text>
 
+              {canResetIcon ? (
+                <TouchableOpacity activeOpacity={0.6} onPress={handleResetIcon} style={styles.resetIconLink}>
+                  <Text style={styles.resetIconText}>{i18n.t('manage.resetIcon')}</Text>
+                </TouchableOpacity>
+              ) : null}
+
               <View style={styles.iconGrid}>
                 {iconChoices.map((choice) => (
                   <TouchableOpacity
@@ -360,7 +380,7 @@ export default function EntryEditor<T extends string>({
               onPress={onDelete}
               style={styles.delete}
               disabled={isSaving}>
-              <Text style={styles.deleteText}>{i18n.t('transactionActions.delete')}</Text>
+              <Text style={styles.deleteText}>{deleteLabel ?? i18n.t('transactionActions.delete')}</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -475,6 +495,14 @@ function createStyles(colors: ColorTokens) {
       fontSize: 13,
       color: colors.textMuted,
       textAlign: 'center',
+    },
+    resetIconLink: {
+      alignSelf: 'center',
+    },
+    resetIconText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.tint,
     },
     iconGrid: {
       flexDirection: 'row',

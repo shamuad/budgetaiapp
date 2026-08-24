@@ -29,6 +29,8 @@ type TransactionItemProps = {
   /** Supplying either handler turns the row into a swipeable (iOS) or long-pressable (Android) row. */
   onEdit?: () => void;
   onDelete?: () => void;
+  /** Overrides the generic delete copy, e.g. to warn that a linked installment plan deletes together. */
+  deleteConfirmation?: { title: string; message: string; confirmLabel?: string };
 };
 
 export default function TransactionItem({
@@ -41,6 +43,7 @@ export default function TransactionItem({
   flat,
   onEdit,
   onDelete,
+  deleteConfirmation,
 }: TransactionItemProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -49,12 +52,12 @@ export default function TransactionItem({
 
   function confirmDelete() {
     Alert.alert(
-      i18n.t('transactionActions.deleteConfirmTitle'),
-      i18n.t('transactionActions.deleteConfirmMessage'),
+      deleteConfirmation?.title ?? i18n.t('transactionActions.deleteConfirmTitle'),
+      deleteConfirmation?.message ?? i18n.t('transactionActions.deleteConfirmMessage'),
       [
         { text: i18n.t('addTransaction.cancel'), style: 'cancel' },
         {
-          text: i18n.t('transactionActions.delete'),
+          text: deleteConfirmation?.confirmLabel ?? i18n.t('transactionActions.delete'),
           style: 'destructive',
           onPress: () => onDelete?.(),
         },

@@ -12,6 +12,8 @@ import {
   fromISODate,
   i18n,
   parseAmountString,
+  resolveCategoryName,
+  sortCategoriesByName,
   toBaseAmount,
   toISODate,
   TransactionInput,
@@ -22,6 +24,7 @@ import {
   useAssetSearch,
   useCategories,
   useCreateTransactionMutation,
+  useCreateTransactionsBatchMutation,
   useTransactionsQuery,
   useUpdateTransactionMutation,
 } from '@budgetaiapp/shared';
@@ -35,6 +38,7 @@ import {
   Folder,
   Landmark,
   Mic,
+  Repeat,
   Sparkles,
   TrendingUp,
   Type,
@@ -60,6 +64,7 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import {
   askGemini,
   buildTransactionPrompt,
+  MAX_INSTALLMENTS,
   normalizeAssetSymbol,
   parseTransactionResponse,
   TransactionValues,
@@ -146,6 +151,52 @@ function parseOptionalAmount(input: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+/** Digits only — an installment count is a whole number of payments. */
+function sanitizeInstallmentsInput(input: string) {
+  return input.replace(/[^\d]/g, '');
+}
+
+/** Blank or zero reads as a single, un-split payment. */
+function parseInstallmentsInput(input: string): number {
+  const parsed = Number.parseInt(input, 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 1) {
+    return 1;
+  }
+
+  return Math.min(MAX_INSTALLMENTS, parsed);
+}
+
+/** A fresh id for an installment plan, without pulling in a uuid dependency. */
+function generateInstallmentGroupId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  // The column is a real `uuid`, so the fallback has to look like one too —
+  // an RFC 4122 v4 id built from Math.random for engines without Web Crypto.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = (Math.random() * 16) | 0;
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+
+    return value.toString(16);
+  });
+}
+
+/**
+ * The same calendar day N months later, clamped into a shorter month instead
+ * of overflowing into the one after — so a plan started on the 31st still
+ * bills once every month rather than skipping one.
+ */
+function addMonthsClamped(date: Date, months: number): Date {
+  const targetIndex = date.getMonth() + months;
+  const year = date.getFullYear() + Math.floor(targetIndex / 12);
+  const month = ((targetIndex % 12) + 12) % 12;
+  const daysInTargetMonth = new Date(year, month + 1, 0).getDate();
+
+  return new Date(year, month, Math.min(date.getDate(), daysInTargetMonth));
+}
+
 /** The source account is not part of the AI result, so it is validated alongside it. */
 function validateDraft(values: TransactionValues, asset: Asset | null): ValidationResult {
   if (!Number.isFinite(values.amount) || values.amount <= 0) {
@@ -172,7 +223,8 @@ function validateDraft(values: TransactionValues, asset: Asset | null): Validati
       return { ok: false, message: i18n.t('addTransaction.sameAsset') };
     }
 
-    return { ok: true, draft: { ...values, title, category: null, asset } };
+    // A transfer moves money rather than spending it, so it is never split.
+    return { ok: true, draft: { ...values, title, category: null, asset, installments: 1 } };
   }
 
   if (!values.category) {
@@ -254,7 +306,10 @@ function CategoryPicker({
     <PickerModal
       visible={visible}
       title={i18n.t('addTransaction.categories')}
-      items={categories.filter((category) => category.type === tab)}
+      items={sortCategoriesByName(categories.filter((category) => category.type === tab)).map((category) => ({
+        ...category,
+        name: resolveCategoryName(category),
+      }))}
       selectedId={selectedId}
       onSelect={onSelect}
       onClose={onClose}>
@@ -273,7 +328,7 @@ export default function AddTransactionModal({
   onClose,
   transactionToEdit = null,
 }: AddTransactionModalProps) {
-  const { colors } = useAppTheme();
+  const { colors, scheme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -286,6 +341,9 @@ export default function AddTransactionModal({
   const [isSymbolFocused, setIsSymbolFocused] = useState(false);
   const [shares, setShares] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
+  // How many equal monthly payments a new expense or income splits into. Kept
+  // as text so the field can sit empty while the user is still typing.
+  const [installments, setInstallments] = useState('1');
   // Set only by an explicit dropdown pick, so a live quote is fetched once per
   // selection rather than on every keystroke while typing a symbol by hand.
   const [priceSymbol, setPriceSymbol] = useState<string | null>(null);
@@ -312,9 +370,17 @@ export default function AddTransactionModal({
   const prefilledIdRef = useRef<string | null>(null);
 
   const { categories } = useCategories();
+  // Hidden (soft-deleted) defaults stay out of new picks — but `categories`
+  // itself stays unfiltered so editing an old transaction can still resolve
+  // whichever category it was originally saved under.
+  const activeCategories = useMemo(
+    () => categories.filter((category) => category.is_active !== false),
+    [categories],
+  );
   const { assets } = useAssets();
   const { transactions, balanceByAsset } = useTransactionsQuery();
   const createTransactionMutation = useCreateTransactionMutation();
+  const createTransactionsBatchMutation = useCreateTransactionsBatchMutation();
   const updateTransactionMutation = useUpdateTransactionMutation();
   const {
     isRecording,
@@ -326,7 +392,7 @@ export default function AddTransactionModal({
     onFinish: async ({ base64, mimeType }) => {
       await runAI([
         { inlineData: { mimeType, data: base64 } },
-        buildTransactionPrompt(categories, assets),
+        buildTransactionPrompt(activeCategories, assets),
       ]);
     },
     onError: reportAIError,
@@ -338,6 +404,16 @@ export default function AddTransactionModal({
   // Only a transfer into an investment account buys a holding. A transfer into a
   // plain bank account is just cash moving, and names no asset.
   const isInvestmentPurchase = isTransfer && selectedToAsset?.type === 'investment';
+  // A transfer is never split, and editing a single row of an existing plan
+  // must not spawn a second one — so the field only ever applies to a new
+  // expense or income.
+  const canSplitIntoInstallments = !isTransfer && !isEditing;
+  const installmentCount = canSplitIntoInstallments ? parseInstallmentsInput(installments) : 1;
+  const parsedTotalAmount = parseAmountString(amount);
+  const installmentAmount =
+    canSplitIntoInstallments && installmentCount > 1 && Number.isFinite(parsedTotalAmount) && parsedTotalAmount > 0
+      ? parsedTotalAmount / installmentCount
+      : null;
 
   /**
    * Symbols already held in the destination account, matched against what has
@@ -478,6 +554,7 @@ export default function AddTransactionModal({
     setAssetSymbol('');
     setShares('');
     setUnitPrice('');
+    setInstallments('1');
     setPriceSymbol(null);
     setCurrency(DEFAULT_CURRENCY);
     setExchangeRate(1);
@@ -648,6 +725,10 @@ export default function AddTransactionModal({
     if (values.currency) {
       setCurrency(values.currency);
     }
+
+    // Only a new expense or income can be split, so anything the model heard
+    // otherwise is dropped rather than silently carried over.
+    setInstallments(values.type !== 'transfer' && !isEditing ? String(values.installments) : '1');
   }
 
   function handleAmountChange(text: string) {
@@ -683,7 +764,7 @@ export default function AddTransactionModal({
     try {
       const { action, values } = parseTransactionResponse(
         await askGemini(parts),
-        categories,
+        activeCategories,
         assets,
         date,
       );
@@ -735,9 +816,46 @@ export default function AddTransactionModal({
 
     Keyboard.dismiss();
 
-    if (await runAI([buildTransactionPrompt(categories, assets, text)])) {
+    if (await runAI([buildTransactionPrompt(activeCategories, assets, text)])) {
       setAiInput('');
     }
+  }
+
+  /**
+   * Splits one draft into `draft.installments` equal monthly rows, all tagged
+   * with the same fresh group id so they can later be edited or deleted as one
+   * plan. The last row absorbs the rounding remainder, so the rows always sum
+   * back to exactly the original total.
+   */
+  async function saveInstallmentPlan(draft: TransactionDraft) {
+    const count = draft.installments;
+    const groupId = generateInstallmentGroupId();
+    const baseAmount = Math.round((draft.amount / count) * 100) / 100;
+
+    const inputs: TransactionInput[] = Array.from({ length: count }, (_, index) => {
+      const isLast = index === count - 1;
+      const amount = isLast
+        ? Math.round((draft.amount - baseAmount * (count - 1)) * 100) / 100
+        : baseAmount;
+
+      return {
+        title: `${draft.title} (${index + 1}/${count})`,
+        amount,
+        currency,
+        exchange_rate: exchangeRate,
+        type: draft.type,
+        date: toISODate(addMonthsClamped(draft.date, index)),
+        category_id: draft.category?.id ?? null,
+        asset_id: draft.asset.id,
+        to_asset_id: null,
+        asset_symbol: null,
+        shares: null,
+        unit_price: null,
+        installment_group_id: groupId,
+      };
+    });
+
+    await createTransactionsBatchMutation.mutateAsync(inputs);
   }
 
   async function saveTransaction(draft: TransactionDraft) {
@@ -750,26 +868,32 @@ export default function AddTransactionModal({
     setFormError(null);
 
     try {
-      const input: TransactionInput = {
-        title: draft.title,
-        amount: draft.amount,
-        currency,
-        // Locked-in rate at save time — never rewritten when live rates move.
-        exchange_rate: exchangeRate,
-        type: draft.type,
-        date: toISODate(draft.date),
-        category_id: draft.category?.id ?? null,
-        asset_id: draft.asset.id,
-        to_asset_id: draft.toAsset?.id ?? null,
-        asset_symbol: draft.assetSymbol,
-        shares: draft.shares,
-        unit_price: draft.unitPrice,
-      };
-
-      if (transactionToEdit) {
-        await updateTransactionMutation.mutateAsync({ id: transactionToEdit.id, input });
+      if (!transactionToEdit && draft.type !== 'transfer' && draft.installments > 1) {
+        await saveInstallmentPlan(draft);
       } else {
-        await createTransactionMutation.mutateAsync(input);
+        const input: TransactionInput = {
+          title: draft.title,
+          amount: draft.amount,
+          currency,
+          // Locked-in rate at save time — never rewritten when live rates move.
+          exchange_rate: exchangeRate,
+          type: draft.type,
+          date: toISODate(draft.date),
+          category_id: draft.category?.id ?? null,
+          asset_id: draft.asset.id,
+          to_asset_id: draft.toAsset?.id ?? null,
+          asset_symbol: draft.assetSymbol,
+          shares: draft.shares,
+          unit_price: draft.unitPrice,
+          // Editing a row keeps whatever plan it already belonged to.
+          installment_group_id: transactionToEdit?.installment_group_id ?? null,
+        };
+
+        if (transactionToEdit) {
+          await updateTransactionMutation.mutateAsync({ id: transactionToEdit.id, input });
+        } else {
+          await createTransactionMutation.mutateAsync(input);
+        }
       }
 
       onClose();
@@ -808,6 +932,7 @@ export default function AddTransactionModal({
         shares: isInvestmentPurchase ? parseOptionalAmount(shares) : null,
         unitPrice: isInvestmentPurchase ? parseOptionalAmount(unitPrice) : null,
         currency: null,
+        installments: installmentCount,
       },
       selectedAsset,
     );
@@ -850,6 +975,7 @@ export default function AddTransactionModal({
 
     if (nextType === 'transfer') {
       setSelectedCategory(null);
+      setInstallments('1');
       return;
     }
 
@@ -1093,7 +1219,7 @@ export default function AddTransactionModal({
                   onPress={handleOpenCategoryPicker}>
                   {selectedCategory ? (
                     <Text style={styles.rowText}>
-                      {selectedCategory.icon} {selectedCategory.name}
+                      {selectedCategory.icon} {resolveCategoryName(selectedCategory)}
                     </Text>
                   ) : (
                     <Text style={styles.rowPlaceholder}>
@@ -1109,10 +1235,42 @@ export default function AddTransactionModal({
                 icon={<Calendar color={colors.textMuted} size={20} />}
                 label={i18n.t('addTransaction.date')}
                 onPress={handleOpenDatePicker}
-                isLast>
+                isLast={!canSplitIntoInstallments}>
                 <Text style={styles.rowText}>{formatDate(date)}</Text>
               </FormRow>
+
+              {/* Splits a new expense or income into equal monthly payments. Not
+                  offered for a transfer, or while editing a single existing row. */}
+              {canSplitIntoInstallments ? (
+                <FormRow
+                  styles={styles}
+                  colors={colors}
+                  icon={<Repeat color={colors.textMuted} size={20} />}
+                  label={i18n.t('addTransaction.installments')}
+                  isLast>
+                  <TextInput
+                    style={styles.rowInput}
+                    value={installments}
+                    onChangeText={(text) => setInstallments(sanitizeInstallmentsInput(text))}
+                    placeholder="1"
+                    placeholderTextColor={colors.placeholder}
+                    keyboardType="number-pad"
+                    returnKeyType="done"
+                  />
+                </FormRow>
+              ) : null}
             </View>
+
+            {canSplitIntoInstallments && installmentCount > 1 && installmentAmount !== null ? (
+              <View style={styles.baseHint}>
+                <Text style={styles.baseHintText}>
+                  {i18n.t('addTransaction.installmentsHint', {
+                    count: installmentCount,
+                    amount: formatMoney(installmentAmount, currency),
+                  })}
+                </Text>
+              </View>
+            ) : null}
 
             {insufficientBalanceWarning ? (
               <View style={styles.warningBanner}>
@@ -1257,6 +1415,10 @@ export default function AddTransactionModal({
                   value={date}
                   mode="date"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  // iOS's spinner otherwise follows the device's system
+                  // appearance, which can mismatch our own Light/Dark/Auto
+                  // preference and render white-on-white text.
+                  themeVariant={scheme}
                   onValueChange={handleDateValueChange}
                   onDismiss={() => setShowDatePicker(false)}
                 />
@@ -1335,7 +1497,7 @@ export default function AddTransactionModal({
                 <Text style={styles.confirmLine}>{pendingDraft.title}</Text>
                 <Text style={styles.confirmLine}>
                   {formatMoney(pendingDraft.amount, currency)}
-                  {pendingDraft.category ? ` · ${pendingDraft.category.name}` : ''}
+                  {pendingDraft.category ? ` · ${resolveCategoryName(pendingDraft.category)}` : ''}
                 </Text>
                 {currency !== DEFAULT_CURRENCY && Number.isFinite(exchangeRate) ? (
                   <Text style={styles.confirmDate}>
@@ -1379,7 +1541,7 @@ export default function AddTransactionModal({
 
           <CategoryPicker
             visible={showCategoryPicker}
-            categories={categories}
+            categories={activeCategories}
             selectedId={selectedCategory?.id}
             tab={categoryTab}
             styles={styles}

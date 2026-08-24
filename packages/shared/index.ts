@@ -14,4 +14,7 @@ export * from './utils/brandDictionary';
 export * from './utils/getIcon';
 export * from './utils/iconAsset';
 export * from './utils/accountCardColor';
+export * from './utils/categoryPalette';
+export * from './utils/categoryDisplay';
+export * from './utils/defaultCategories';
 export * from './utils/colorSpace';

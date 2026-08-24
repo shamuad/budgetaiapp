@@ -34,6 +34,9 @@ export interface Category {
   name: string;
   type: CategoryType;
   icon: string | null;
+  is_custom: boolean;
+  translation_key: string | null;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -66,6 +69,9 @@ export interface Transaction {
   // Calendar day as YYYY-MM-DD, without a time or timezone.
   date: string;
   notes: string | null;
+  // Shared by every row an installment plan split into, so they can be edited
+  // or deleted together. Null for a normal, one-off transaction.
+  installment_group_id: string | null;
   created_at: string;
 }
 

@@ -30,6 +30,8 @@ export type ManageEntry<T extends string> = {
   icon: string | null;
   type: T;
   customColor?: string | null;
+  /** The row's original icon, if it has one — lets the editor offer "Reset to default". */
+  defaultIcon?: string | null;
   /** Secondary line, such as the account kind or how often the row is used. */
   subtitle: string;
 };
@@ -271,6 +273,7 @@ export default function ManageEntriesModal<T extends string>({
                       customColor: target.customColor ?? null,
                     }
               }
+              defaultIcon={isCreating ? null : target.defaultIcon}
               typeOptions={typeOptions}
               iconChoices={iconChoices}
               enableBrandDetect={enableBrandDetect}

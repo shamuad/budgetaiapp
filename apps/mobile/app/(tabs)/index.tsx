@@ -59,7 +59,7 @@ function TransactionIcon({
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { transactions, totalBalance, balanceByAsset, isLoading, error, remove } = useTransactions({
+  const { transactions, totalBalance, balanceByAsset, isLoading, error, remove, removeGroup } = useTransactions({
     onDeleteError: (err) => {
       Alert.alert(i18n.t('common.errorTitle'), err.message || i18n.t('transactionActions.deleteError'));
     },
@@ -186,6 +186,7 @@ export default function DashboardScreen() {
                 const isIncome = transaction.type === 'income';
                 // A transfer neither earns nor spends, so it carries no sign.
                 const isTransfer = transaction.type === 'transfer';
+                const groupId = transaction.installment_group_id;
 
                 return (
                   <View key={transaction.id}>
@@ -208,7 +209,16 @@ export default function DashboardScreen() {
                         amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatMoney(transaction.amount, transaction.currency)}`}
                         positive={isIncome}
                         onEdit={() => openEditor(transaction)}
-                        onDelete={() => remove(transaction.id)}
+                        onDelete={() => (groupId ? removeGroup(groupId) : remove(transaction.id))}
+                        deleteConfirmation={
+                          groupId
+                            ? {
+                                title: i18n.t('transactionActions.installmentDeleteTitle'),
+                                message: i18n.t('transactionActions.installmentDeleteMessage'),
+                                confirmLabel: i18n.t('transactionActions.deleteAll'),
+                              }
+                            : undefined
+                        }
                       />
                     </View>
                   </View>

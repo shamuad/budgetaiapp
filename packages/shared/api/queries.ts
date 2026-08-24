@@ -21,13 +21,18 @@ import {
   createCategory,
   deleteCategory,
   fetchCategories,
+  hideCategory,
+  restoreCategory,
   updateCategory,
   type CategoryInput,
+  type CategoryWriteInput,
 } from '../lib/api/categories';
 import {
   createTransaction,
+  createTransactions,
   deleteAllTransactions,
   deleteTransaction,
+  deleteTransactionsByGroup,
   fetchTransactions,
   updateTransaction,
   type TransactionInput,
@@ -260,6 +265,22 @@ export function useCreateTransactionMutation(
   });
 }
 
+/** Saves every installment of a plan in one go, so the group is never half-written. */
+export function useCreateTransactionsBatchMutation(
+  options?: UseMutationOptions<void, Error, TransactionInput[]>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createTransactions,
+    onSuccess: async (...args) => {
+      await invalidateTransactions(queryClient);
+      await options?.onSuccess?.(...args);
+    },
+    ...options,
+  });
+}
+
 export function useUpdateTransactionMutation(
   options?: UseMutationOptions<void, Error, { id: string; input: TransactionInput }>,
 ) {
@@ -282,6 +303,22 @@ export function useDeleteTransactionMutation(
 
   return useMutation({
     mutationFn: deleteTransaction,
+    onSuccess: async (...args) => {
+      await invalidateTransactions(queryClient);
+      await options?.onSuccess?.(...args);
+    },
+    ...options,
+  });
+}
+
+/** Deletes an entire linked installment plan at once. */
+export function useDeleteTransactionsByGroupMutation(
+  options?: UseMutationOptions<void, Error, string>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteTransactionsByGroup,
     onSuccess: async (...args) => {
       await invalidateTransactions(queryClient);
       await options?.onSuccess?.(...args);
@@ -413,7 +450,7 @@ export function useCreateCategoryMutation(
 }
 
 export function useUpdateCategoryMutation(
-  options?: UseMutationOptions<void, Error, { id: string; input: CategoryInput }>,
+  options?: UseMutationOptions<void, Error, { id: string; input: CategoryWriteInput }>,
 ) {
   const queryClient = useQueryClient();
 
@@ -442,6 +479,37 @@ export function useDeleteCategoryMutation(
   });
 }
 
+/** Soft-deletes a default category (see `hideCategory`). */
+export function useHideCategoryMutation(
+  options?: UseMutationOptions<void, Error, string>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: hideCategory,
+    onSuccess: async (...args) => {
+      await invalidateCategoriesAndTransactions(queryClient);
+      await options?.onSuccess?.(...args);
+    },
+    ...options,
+  });
+}
+
+export function useRestoreCategoryMutation(
+  options?: UseMutationOptions<void, Error, string>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: restoreCategory,
+    onSuccess: async (...args) => {
+      await invalidateCategoriesAndTransactions(queryClient);
+      await options?.onSuccess?.(...args);
+    },
+    ...options,
+  });
+}
+
 /**
  * Convenience hook that mirrors the old context API.
  * Pass `onDeleteError` from UI layers that need native error feedback.
@@ -451,10 +519,15 @@ export function useTransactions(options?: { onDeleteError?: (error: Error) => vo
   const deleteMutation = useDeleteTransactionMutation({
     onError: (error) => options?.onDeleteError?.(error),
   });
+  const deleteGroupMutation = useDeleteTransactionsByGroupMutation({
+    onError: (error) => options?.onDeleteError?.(error),
+  });
 
   return {
     ...snapshot,
     remove: (id: string) => deleteMutation.mutateAsync(id),
+    /** Deletes every transaction sharing an installment plan's group id. */
+    removeGroup: (groupId: string) => deleteGroupMutation.mutateAsync(groupId),
   };
 }
 

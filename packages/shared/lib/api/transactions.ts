@@ -26,8 +26,9 @@ export type TransactionRow = Pick<
   | 'asset_symbol'
   | 'shares'
   | 'unit_price'
+  | 'installment_group_id'
 > & {
-  category: Pick<Category, 'icon' | 'name'> | null;
+  category: Pick<Category, 'icon' | 'name' | 'is_custom' | 'translation_key'> | null;
   asset: Pick<Asset, 'icon' | 'name'> | null;
   /** The receiving account of a transfer. Null for income and expense. */
   to_asset: Pick<Asset, 'icon' | 'name'> | null;
@@ -54,12 +55,15 @@ export type TransactionInput = {
   asset_symbol: string | null;
   shares: number | null;
   unit_price: number | null;
+  // Ties every row an installment plan was split into back together. Null on
+  // a normal, one-off transaction.
+  installment_group_id: string | null;
 };
 
 // Both `asset_id` and `to_asset_id` point at `assets`, so each embed names its
 // own foreign key. Without the hint PostgREST cannot tell the two apart.
 const COLUMNS =
-  'id, title, amount, currency, exchange_rate, type, date, category_id, asset_id, to_asset_id, asset_symbol, shares, unit_price, category:categories(icon, name), asset:assets!asset_id(icon, name), to_asset:assets!to_asset_id(icon, name)';
+  'id, title, amount, currency, exchange_rate, type, date, category_id, asset_id, to_asset_id, asset_symbol, shares, unit_price, installment_group_id, category:categories(icon, name, is_custom, translation_key), asset:assets!asset_id(icon, name), to_asset:assets!to_asset_id(icon, name)';
 
 /**
  * Every transaction, latest date first and newest entry first within a date.
@@ -90,6 +94,15 @@ export async function createTransaction(input: TransactionInput): Promise<void> 
   }
 }
 
+/** Writes every installment of a plan in one round trip, so the group is never half-saved. */
+export async function createTransactions(inputs: TransactionInput[]): Promise<void> {
+  const { error } = await getSupabase().from('transactions').insert(inputs);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function updateTransaction(id: string, input: TransactionInput): Promise<void> {
   const { error } = await getSupabase().from('transactions').update(input).eq('id', id);
 
@@ -100,6 +113,18 @@ export async function updateTransaction(id: string, input: TransactionInput): Pr
 
 export async function deleteTransaction(id: string): Promise<void> {
   const { error } = await getSupabase().from('transactions').delete().eq('id', id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+/** Deletes every transaction in an installment plan at once, keeping the group consistent. */
+export async function deleteTransactionsByGroup(groupId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('transactions')
+    .delete()
+    .eq('installment_group_id', groupId);
 
   if (error) {
     throw new Error(error.message);
