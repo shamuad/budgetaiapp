@@ -1,5 +1,6 @@
 export { default as i18n } from './i18n';
 export { getSupabase } from './lib/supabase';
+export * from './lib/authLinks';
 export * from './config/apiConfig';
 export * from './lib/api/assets';
 export * from './lib/api/categories';
@@ -9,6 +10,7 @@ export * from './lib/format';
 export * from './types/database';
 export * from './api/queries';
 export * from './store/useAppStore';
+export * from './store/useAuthStore';
 export * from './store/useThemeStore';
 export * from './utils/brandDictionary';
 export * from './utils/getIcon';

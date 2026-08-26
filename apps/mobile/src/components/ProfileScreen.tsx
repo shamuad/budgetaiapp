@@ -1,10 +1,20 @@
-import { i18n, ThemePreference } from '@budgetaiapp/shared';
+import { i18n, ThemePreference, useAuthStore } from '@budgetaiapp/shared';
 import Constants from 'expo-constants';
-import { Crown, Info, Moon, Smartphone, Sun, User } from 'lucide-react-native';
-import { ReactNode, useMemo } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Crown, Info, LogOut, Moon, Smartphone, Sun } from 'lucide-react-native';
+import { ReactNode, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { InitialAvatar } from './InitialAvatar';
 import { radius, spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme } from '../theming';
 import type { ColorTokens } from '../theming';
@@ -20,18 +30,44 @@ export default function ProfileScreen() {
   const { colors, preference, setPreference } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const user = useAuthStore((state) => state.user);
+  const signOut = useAuthStore((state) => state.signOut);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const metadataName = typeof user?.user_metadata?.name === 'string' ? user.user_metadata.name.trim() : '';
+  const displayName = metadataName || (user?.email ?? '') || i18n.t('profile.namePlaceholder');
+
+  const handleLogout = () => {
+    Alert.alert(i18n.t('profile.logoutTitle'), i18n.t('profile.logoutMessage'), [
+      { text: i18n.t('addTransaction.cancel'), style: 'cancel' },
+      {
+        text: i18n.t('profile.logout'),
+        style: 'destructive',
+        onPress: async () => {
+          setIsSigningOut(true);
+
+          try {
+            await signOut();
+            // No navigation call needed — the root layout's `Stack.Protected`
+            // guard swaps to `(auth)` on its own once `session` clears.
+          } catch (error) {
+            setIsSigningOut(false);
+            Alert.alert(i18n.t('common.errorTitle'), (error as Error).message);
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.identity}>
           <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <User color={colors.brand} size={44} strokeWidth={1.75} />
-            </View>
+            <InitialAvatar name={displayName} size={88} />
           </View>
 
-          <Text style={styles.name}>{i18n.t('profile.namePlaceholder')}</Text>
+          <Text style={styles.name}>{displayName}</Text>
 
           <View style={styles.premiumBadge}>
             <Crown color={colors.premium} size={14} fill={colors.premium} />
@@ -84,6 +120,26 @@ export default function ProfileScreen() {
               isLast>
               <Text style={styles.versionValue}>{appVersion}</Text>
             </SettingsRow>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{i18n.t('profile.accountSection')}</Text>
+
+          <View style={styles.glassCard}>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={handleLogout}
+              disabled={isSigningOut}
+              style={styles.logoutRow}
+              accessibilityRole="button"
+              accessibilityLabel={i18n.t('profile.logout')}>
+              <View style={styles.logoutLabelGroup}>
+                <LogOut color={colors.danger} size={20} />
+                <Text style={styles.logoutLabel}>{i18n.t('profile.logout')}</Text>
+              </View>
+              {isSigningOut && <ActivityIndicator color={colors.danger} />}
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -155,19 +211,6 @@ function createStyles(colors: ColorTokens) {
       backgroundColor: colors.brandSurface,
       borderWidth: 1,
       borderColor: colors.borderGlass,
-    },
-    avatar: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surfaceElevated,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.12,
-      shadowRadius: 12,
-      elevation: 4,
     },
     name: {
       marginTop: spacing.xs,
@@ -280,6 +323,23 @@ function createStyles(colors: ColorTokens) {
     versionValue: {
       fontSize: 14,
       color: colors.textMuted,
+    },
+    logoutRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      minHeight: TOUCH_TARGET,
+    },
+    logoutLabelGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    logoutLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.dangerText,
     },
   });
 }

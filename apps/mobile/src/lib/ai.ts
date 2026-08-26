@@ -4,25 +4,20 @@ import {
   CategoryType,
   CurrencyCode,
   fromISODate,
+  getSupabase,
   i18n,
   parseAIAmount,
   toISODate,
   TransactionType,
 } from '@budgetaiapp/shared';
-import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 
-// Auto-updating aliases: pinned Gemini versions get retired and start returning 404.
-// The lite model is the fallback for when the main one is overloaded; it transcribes
-// audio noticeably worse, so it is only reached after the primary model refuses.
-const MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
-
-// Sampling defaults to temperature 1, which returns a different transcription for
-// byte-identical audio. Extraction is not a creative task, so sampling is switched off.
-const DETERMINISTIC_CONFIG = {
-  temperature: 0,
-  topP: 1,
-  topK: 1,
-};
+/**
+ * One piece of a request: a prompt string, or the base64 audio and receipt
+ * images captured by voice input and receipt scanning. Mirrors the shape the
+ * `ask-gemini` Edge Function forwards to Gemini, so the app no longer depends
+ * on the Google SDK — or on holding an API key.
+ */
+export type AIPart = string | { inlineData: { mimeType: string; data: string } };
 
 export type AIAction = 'save' | 'cancel' | 'none';
 
@@ -57,43 +52,75 @@ export type AIResult = {
   values: TransactionValues | null;
 };
 
-function isModelOverloaded(err: unknown) {
-  const message = err instanceof Error ? err.message : '';
+/** The function's error codes, in the user's own language. */
+function messageForCode(code: string | null): string | null {
+  if (code === 'missing_api_key') {
+    return i18n.t('addTransaction.aiMissingKey');
+  }
 
-  return message.includes('[503') || message.includes('[429');
+  if (code === 'model_overloaded') {
+    return i18n.t('addTransaction.aiBusy');
+  }
+
+  return null;
 }
 
-/** Sends the prompt to Gemini and returns the raw JSON text of the first model that answers. */
-export async function askGemini(parts: (string | Part)[]) {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+/**
+ * Digs the real reason out of a failed invoke. `supabase-js` reports every
+ * non-2xx as "Edge Function returned a non-2xx status code" and hides the
+ * response body on `error.context`, so without this a missing secret, an
+ * undeployed function, and an expired session all read identically.
+ */
+async function describeFunctionError(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown }).context;
 
-  if (!apiKey) {
-    throw new Error(i18n.t('addTransaction.aiMissingKey'));
+  // No response at all: offline, or the request never left the device.
+  if (!(context instanceof Response)) {
+    return (error as Error).message;
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+  let body: Record<string, unknown> | null = null;
 
-  for (const modelName of MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        generationConfig: {
-          ...DETERMINISTIC_CONFIG,
-          responseMimeType: 'application/json',
-        },
-      });
-
-      const result = await model.generateContent(parts);
-
-      return result.response.text();
-    } catch (err) {
-      if (!isModelOverloaded(err)) {
-        throw err;
-      }
-    }
+  try {
+    body = await context.clone().json();
+  } catch {
+    body = null;
   }
 
-  throw new Error(i18n.t('addTransaction.aiBusy'));
+  const localized = messageForCode(typeof body?.error === 'string' ? body.error : null);
+
+  if (localized) {
+    return localized;
+  }
+
+  // `message` covers both this function's own detail and the platform's
+  // gateway errors — a 401 with no session, or a 404 when `ask-gemini` has
+  // not been deployed yet.
+  const detail = [body?.message, body?.msg].find((value) => typeof value === 'string');
+
+  return detail ? `${detail} (HTTP ${context.status})` : `HTTP ${context.status}`;
+}
+
+/**
+ * Sends the prompt to the `ask-gemini` Edge Function and returns the raw JSON
+ * text the model answered with. The key, the model list, and the fallback to
+ * the lite model all live server-side now — see
+ * `supabase/functions/ask-gemini/index.ts`.
+ */
+export async function askGemini(parts: AIPart[]) {
+  const { data, error } = await getSupabase().functions.invoke<{ text: string }>('ask-gemini', {
+    body: { parts },
+  });
+
+  if (error) {
+    throw new Error(await describeFunctionError(error));
+  }
+
+  if (!data?.text) {
+    throw new Error(i18n.t('addTransaction.aiError'));
+  }
+
+  return data.text;
 }
 
 export function buildTransactionPrompt(

@@ -44,6 +44,7 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
   const callbacksRef = useRef({ onFinish, onError });
   const finishingRef = useRef(false);
   const isHeldRef = useRef(false);
+  const isRecordingRef = useRef(false);
   const startPromiseRef = useRef<Promise<void> | null>(null);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,8 +60,11 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
   }, []);
 
   const finish = useCallback(
+    // `isRecording` state lags the actual mic state by a render, so a guard
+    // based on it can drop a same-tick stop/finish call (the push-to-talk bug).
+    // The ref mirrors `recorder.isRecording` synchronously instead.
     async (deliver: boolean) => {
-      const wasActive = recorder.isRecording || isRecording;
+      const wasActive = recorder.isRecording || isRecordingRef.current;
 
       if (finishingRef.current || (!wasActive && !deliver)) {
         return;
@@ -68,6 +72,7 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
 
       finishingRef.current = true;
       clearMaxTimer();
+      isRecordingRef.current = false;
       setIsRecording(false);
       setIsProcessing(deliver);
 
@@ -98,7 +103,7 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
         setIsProcessing(false);
       }
     },
-    [clearMaxTimer, isRecording, recorder]
+    [clearMaxTimer, recorder]
   );
 
   const start = useCallback(async () => {
@@ -128,6 +133,7 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
         }
 
         recorder.record();
+        isRecordingRef.current = true;
         setIsRecording(true);
 
         maxTimerRef.current = setTimeout(() => {
@@ -151,7 +157,7 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
       await startPromiseRef.current;
     }
 
-    if (recorder.isRecording) {
+    if (recorder.isRecording || isRecordingRef.current) {
       await finish(true);
     }
   }, [finish, recorder]);

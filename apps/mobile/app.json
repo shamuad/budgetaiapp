@@ -3,7 +3,7 @@
     "name": "mobile",
     "slug": "mobile",
     "version": "1.0.0",
-    "scheme": "budgetaiapp",
+    "scheme": "budgetai",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -34,6 +34,13 @@
         "expo-audio",
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to record your voice so AI can fill in transactions."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can scan receipts.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera so you can scan receipts."
         }
       ]
     ],

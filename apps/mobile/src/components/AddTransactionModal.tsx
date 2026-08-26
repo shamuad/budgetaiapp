@@ -29,7 +29,6 @@ import {
   useUpdateTransactionMutation,
 } from '@budgetaiapp/shared';
 import DateTimePicker, { DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
-import { Part } from '@google/generative-ai';
 import {
   AlertTriangle,
   Calendar,
@@ -37,9 +36,7 @@ import {
   CircleDollarSign,
   Folder,
   Landmark,
-  Mic,
   Repeat,
-  Sparkles,
   TrendingUp,
   Type,
   Wallet,
@@ -49,6 +46,7 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -67,14 +65,18 @@ import {
   MAX_INSTALLMENTS,
   normalizeAssetSymbol,
   parseTransactionResponse,
+  type AIPart,
   TransactionValues,
 } from '../lib/ai';
 import { fetchExchangeRate, PICKABLE_CURRENCIES } from '../lib/exchangeRates';
 import { categoryTypeOptions, transactionTypeOptions } from '../lib/labels';
+import { pickReceiptImage } from '../lib/receiptPicker';
 import { radius, spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
 import PickerModal from './PickerModal';
+import ReceiptAnalyzingOverlay from './ReceiptAnalyzingOverlay';
 import SegmentedControl from './SegmentedControl';
+import SmartDock from './SmartDock';
 
 /** Display-only labels and symbols — keeps the picker free of Intl.DisplayNames quirks. */
 const CURRENCY_META: Record<CurrencyCode, { symbol: string; label: string }> = {
@@ -358,6 +360,7 @@ export default function AddTransactionModal({
   const [categoryTab, setCategoryTab] = useState<CategoryType>('expense');
   const [aiInput, setAiInput] = useState('');
   const [isParsing, setIsParsing] = useState(false);
+  const [isScanningReceipt, setIsScanningReceipt] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<TransactionDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -565,6 +568,7 @@ export default function AddTransactionModal({
     setShowToAssetPicker(false);
     setShowCurrencyPicker(false);
     setAiInput('');
+    setIsScanningReceipt(false);
     setPendingDraft(null);
     setFormError(null);
   }, [cancelRecording, visible]);
@@ -757,7 +761,7 @@ export default function AddTransactionModal({
   }
 
   /** Single entry point for both the typed and the spoken request. */
-  async function runAI(parts: (string | Part)[]) {
+  async function runAI(parts: AIPart[]) {
     setFormError(null);
     setIsParsing(true);
 
@@ -818,6 +822,31 @@ export default function AddTransactionModal({
 
     if (await runAI([buildTransactionPrompt(activeCategories, assets, text)])) {
       setAiInput('');
+    }
+  }
+
+  /** Scan Receipt pill: image in, straight through the same `runAI` path as voice/text. */
+  async function handleScanReceipt() {
+    if (isAIBusy || isRecording) {
+      return;
+    }
+
+    try {
+      const image = await pickReceiptImage();
+
+      if (!image) {
+        return;
+      }
+
+      setIsScanningReceipt(true);
+      await runAI([
+        { inlineData: { mimeType: image.mimeType, data: image.base64 } },
+        buildTransactionPrompt(activeCategories, assets),
+      ]);
+    } catch (error) {
+      reportAIError(error);
+    } finally {
+      setIsScanningReceipt(false);
     }
   }
 
@@ -1092,10 +1121,11 @@ export default function AddTransactionModal({
 
           {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets>
+          <KeyboardAvoidingView
+            style={styles.formBody}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.formBody}>
+              <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.amountSection}>
               <View style={styles.amountRow}>
                 <Text style={[styles.currency, { color: typeAccent }]}>
@@ -1431,64 +1461,31 @@ export default function AddTransactionModal({
                 )}
               </View>
             )}
+              </ScrollView>
 
-            {/* Editing an existing row is a manual correction, so the AI panel is hidden. */}
-            {isEditing ? null : (
-            <View style={styles.aiCard}>
-              <View style={styles.aiHeader}>
-                <View style={styles.aiIcon}>
-                  <Sparkles color={colors.aiText} size={20} />
-                </View>
-                <View style={styles.aiTexts}>
-                  <Text style={styles.aiLabel}>{i18n.t('addTransaction.addWithAI')}</Text>
-                  <Text style={styles.aiHint}>
-                    {isRecording
-                      ? i18n.t('addTransaction.aiRecording')
-                      : i18n.t('addTransaction.addWithAIHint')}
-                  </Text>
-                </View>
-              </View>
-
-              <TextInput
-                style={styles.aiInput}
-                value={aiInput}
-                onChangeText={setAiInput}
-                placeholder={i18n.t('addTransaction.aiPlaceholder')}
-                placeholderTextColor={colors.placeholder}
-                multiline
-                editable={!isAIBusy && !isRecording}
-              />
-
-              <View style={styles.aiActions}>
-                <TouchableOpacity
-                  activeOpacity={1}
-                  onPressIn={startRecording}
-                  onPressOut={stopRecording}
-                  disabled={isAIBusy}
-                  hitSlop={{ top: 28, bottom: 28, left: 28, right: 28 }}
-                  style={[
-                    styles.aiMic,
-                    isRecording && styles.aiMicActive,
-                    isAIBusy && styles.aiActionDisabled,
-                  ]}>
-                  <Mic color={colors.onBrand} size={20} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={handleParseText}
-                  disabled={isAIBusy || isRecording}
-                  style={[styles.aiAction, (isAIBusy || isRecording) && styles.aiActionDisabled]}>
-                  {isAIBusy ? (
-                    <ActivityIndicator size="small" color={colors.onBrand} />
-                  ) : (
-                    <Text style={styles.aiActionText}>{i18n.t('addTransaction.aiParse')}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+              {isScanningReceipt ? (
+                <ReceiptAnalyzingOverlay />
+              ) : isProcessing ? (
+                <ReceiptAnalyzingOverlay title={i18n.t('addTransaction.aiVoiceProcessing')} />
+              ) : null}
             </View>
+
+            {/* Editing an existing row is a manual correction, so the AI hub is hidden. */}
+            {isEditing ? null : (
+              <SmartDock
+                visible={visible}
+                aiInput={aiInput}
+                onChangeAiInput={setAiInput}
+                onSubmitText={handleParseText}
+                isRecording={isRecording}
+                isVoiceProcessing={isProcessing}
+                isBusy={isAIBusy}
+                onVoicePressIn={startRecording}
+                onVoicePressOut={stopRecording}
+                onScan={() => void handleScanReceipt()}
+              />
             )}
-          </ScrollView>
+          </KeyboardAvoidingView>
 
           {pendingDraft ? (
             <View style={styles.confirmOverlay}>
@@ -1622,6 +1619,9 @@ function createStyles(colors: ColorTokens) {
       fontSize: 17,
       fontWeight: '600',
       color: colors.text,
+    },
+    formBody: {
+      flex: 1,
     },
     formError: {
       paddingHorizontal: spacing.lg,
@@ -1889,85 +1889,6 @@ function createStyles(colors: ColorTokens) {
       fontSize: 17,
       fontWeight: '600',
       color: colors.tint,
-    },
-    aiCard: {
-      gap: spacing.md,
-      backgroundColor: colors.aiSurface,
-      borderRadius: radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.aiBorder,
-      padding: spacing.lg,
-    },
-    aiHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
-    },
-    aiIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.brandLight,
-    },
-    aiTexts: {
-      flex: 1,
-      gap: 2,
-    },
-    aiLabel: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.aiText,
-    },
-    aiHint: {
-      fontSize: 13,
-      color: colors.aiTextMuted,
-    },
-    aiInput: {
-      minHeight: 64,
-      borderRadius: radius.md,
-      backgroundColor: colors.surface,
-      paddingHorizontal: 14,
-      paddingVertical: spacing.md,
-      fontSize: 15,
-      lineHeight: 20,
-      color: colors.text,
-      textAlignVertical: 'top',
-    },
-    aiActions: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    aiMic: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 52,
-      minHeight: TOUCH_TARGET,
-      borderRadius: radius.md,
-      backgroundColor: colors.aiSurfaceStrong,
-      opacity: 0.9,
-    },
-    aiMicActive: {
-      backgroundColor: colors.danger,
-      opacity: 1,
-      transform: [{ scale: 1.08 }],
-    },
-    aiAction: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: TOUCH_TARGET,
-      borderRadius: radius.md,
-      backgroundColor: colors.aiSurfaceStrong,
-    },
-    aiActionDisabled: {
-      opacity: 0.6,
-    },
-    aiActionText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.onBrand,
     },
     tabs: {
       margin: spacing.lg,
