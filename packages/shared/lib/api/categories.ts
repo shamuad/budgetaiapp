@@ -1,13 +1,18 @@
 import { getSupabase } from '../supabase';
-import type { Category, CategoryType } from '../../types/database';
+import type { Category, CategoryGroup, CategoryType } from '../../types/database';
 
-const COLUMNS = 'id, name, icon, type, is_custom, translation_key, is_active, created_at';
+const COLUMNS =
+  'id, name, icon, type, is_custom, translation_key, is_active, group_code, color_code, created_at';
 
 /** The fields a category form owns. */
 export type CategoryInput = {
   name: string;
   type: CategoryType;
   icon: string;
+  // Required for a new expense category (the picker/management UI enforces
+  // this before calling in); always null for income, which has no 50/30/20 tier.
+  group_code: CategoryGroup | null;
+  color_code: string | null;
 };
 
 /**

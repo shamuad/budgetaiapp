@@ -13,7 +13,6 @@ import {
   i18n,
   parseAmountString,
   resolveCategoryName,
-  sortCategoriesByName,
   toBaseAmount,
   toISODate,
   TransactionInput,
@@ -37,11 +36,12 @@ import {
   Folder,
   Landmark,
   Repeat,
+  Sparkles,
   TrendingUp,
   Type,
   Wallet,
 } from 'lucide-react-native';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -58,21 +58,25 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { useCategorySuggestion } from '../hooks/useCategorySuggestion';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import {
-  askGemini,
-  buildTransactionPrompt,
   MAX_INSTALLMENTS,
   normalizeAssetSymbol,
+  parseReceiptResponse,
   parseTransactionResponse,
-  type AIPart,
+  requestReceiptScan,
+  requestTransactionParse,
+  type AiFilledField,
+  type AIResult,
   TransactionValues,
 } from '../lib/ai';
 import { fetchExchangeRate, PICKABLE_CURRENCIES } from '../lib/exchangeRates';
-import { categoryTypeOptions, transactionTypeOptions } from '../lib/labels';
+import { transactionTypeOptions } from '../lib/labels';
 import { pickReceiptImage } from '../lib/receiptPicker';
 import { radius, spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
+import CategoryGroupPicker from './CategoryGroupPicker';
 import PickerModal from './PickerModal';
 import ReceiptAnalyzingOverlay from './ReceiptAnalyzingOverlay';
 import SegmentedControl from './SegmentedControl';
@@ -283,46 +287,21 @@ function FormRow({ icon, label, children, styles, colors, isLast, onPress }: For
   return <View style={[styles.row, isLast && styles.rowLast]}>{content}</View>;
 }
 
-type CategoryPickerProps = {
-  visible: boolean;
-  categories: Category[];
-  selectedId?: string;
-  tab: CategoryType;
-  styles: ModalStyles;
-  onChangeTab: (tab: CategoryType) => void;
-  onSelect: (category: Category) => void;
-  onClose: () => void;
-};
-
-function CategoryPicker({
-  visible,
-  categories,
-  selectedId,
-  tab,
-  styles,
-  onChangeTab,
-  onSelect,
-  onClose,
-}: CategoryPickerProps) {
-  return (
-    <PickerModal
-      visible={visible}
-      title={i18n.t('addTransaction.categories')}
-      items={sortCategoriesByName(categories.filter((category) => category.type === tab)).map((category) => ({
-        ...category,
-        name: resolveCategoryName(category),
-      }))}
-      selectedId={selectedId}
-      onSelect={onSelect}
-      onClose={onClose}>
-      <SegmentedControl
-        options={categoryTypeOptions()}
-        value={tab}
-        onChange={onChangeTab}
-        style={styles.tabs}
-      />
-    </PickerModal>
-  );
+/**
+ * Marks a value the AI filled in, and disappears as soon as the user edits that
+ * field. Decorative next to the value it annotates, so only the label carries
+ * meaning for a screen reader.
+ */
+function AiSparkle({
+  colors,
+  label,
+  size = 14,
+}: {
+  colors: ColorTokens;
+  label: string;
+  size?: number;
+}) {
+  return <Sparkles color={colors.tint} size={size} accessibilityLabel={label} />;
 }
 
 export default function AddTransactionModal({
@@ -337,6 +316,11 @@ export default function AddTransactionModal({
   const [type, setType] = useState<TransactionType>('expense');
   const [date, setDate] = useState(new Date());
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  // Which fields still hold exactly what `ask-gemini` filled in, so each one can
+  // show a sparkle. A field drops out the moment the user edits it themselves,
+  // which is also what stops a later category suggestion from overriding a pick
+  // they made by hand.
+  const [aiFilled, setAiFilled] = useState<ReadonlySet<AiFilledField>>(new Set());
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [selectedToAsset, setSelectedToAsset] = useState<Asset | null>(null);
   const [assetSymbol, setAssetSymbol] = useState('');
@@ -393,13 +377,40 @@ export default function AddTransactionModal({
     cancel: cancelRecording,
   } = useVoiceRecorder({
     onFinish: async ({ base64, mimeType }) => {
-      await runAI([
-        { inlineData: { mimeType, data: base64 } },
-        buildTransactionPrompt(activeCategories, assets),
-      ]);
+      await runAI(async () =>
+        parseTransactionResponse(
+          await requestTransactionParse({
+            categories: activeCategories,
+            assets,
+            audio: { base64, mimeType },
+          }),
+          activeCategories,
+          assets,
+          date,
+        ),
+      );
     },
     onError: reportAIError,
   });
+
+  // A field the user touches is theirs again, so its sparkle goes with the edit.
+  const clearAiFilled = useCallback((...fields: AiFilledField[]) => {
+    setAiFilled((current) => {
+      if (!fields.some((field) => current.has(field))) {
+        return current;
+      }
+
+      const next = new Set(current);
+
+      fields.forEach((field) => next.delete(field));
+
+      return next;
+    });
+  }, []);
+
+  const markAiFilled = useCallback((...fields: AiFilledField[]) => {
+    setAiFilled((current) => new Set([...current, ...fields]));
+  }, []);
 
   const isAIBusy = isParsing || isProcessing;
   const isEditing = transactionToEdit !== null;
@@ -417,6 +428,30 @@ export default function AddTransactionModal({
     canSplitIntoInstallments && installmentCount > 1 && Number.isFinite(parsedTotalAmount) && parsedTotalAmount > 0
       ? parsedTotalAmount / installmentCount
       : null;
+
+  // A transfer moves money rather than spending it, so it is never categorised.
+  const { suggestedCategory } = useCategorySuggestion({
+    title,
+    type: isTransfer ? null : type,
+    categories: activeCategories,
+    enabled: visible && !isTransfer,
+  });
+
+  // Applies a fresh suggestion as long as the current pick is still an AI
+  // guess (or there is none yet) — a category the user picked themselves is
+  // never silently swapped out from under them.
+  useEffect(() => {
+    if (!suggestedCategory || (selectedCategory && !aiFilled.has('category'))) {
+      return;
+    }
+
+    if (selectedCategory?.id === suggestedCategory.id) {
+      return;
+    }
+
+    setSelectedCategory(suggestedCategory);
+    markAiFilled('category');
+  }, [suggestedCategory]);
 
   /**
    * Symbols already held in the destination account, matched against what has
@@ -552,6 +587,7 @@ export default function AddTransactionModal({
     setType('expense');
     setDate(new Date());
     setSelectedCategory(null);
+    setAiFilled(new Set());
     setSelectedAsset(null);
     setSelectedToAsset(null);
     setAssetSymbol('');
@@ -686,7 +722,7 @@ export default function AddTransactionModal({
     setFormError(error instanceof Error ? error.message : i18n.t('addTransaction.aiError'));
   }
 
-  function applyValues(values: TransactionValues) {
+  function applyValues(values: TransactionValues, filled: AiFilledField[]) {
     // A focused TextInput can push its stale native value back into state on blur,
     // so the keyboard is dismissed before the parsed values are written.
     Keyboard.dismiss();
@@ -702,6 +738,10 @@ export default function AddTransactionModal({
     setType(values.type);
     setDate(values.date);
     setSelectedCategory(values.category);
+    // Every field the model answered with gets a sparkle, and keeps it until
+    // the user edits that field. The account only counts when one was actually
+    // matched, since an unmatched one leaves the existing pick untouched below.
+    setAiFilled(new Set(values.asset ? filled : filled.filter((field) => field !== 'asset')));
 
     // Only overrides the account when the user actually named one, so a request
     // that says nothing about it keeps the default or the existing pick.
@@ -739,10 +779,18 @@ export default function AddTransactionModal({
     const sanitized = sanitizeAmountInput(text);
 
     if (Platform.OS !== 'android' || isProgrammaticAmountRef.current) {
+      // On Android this also catches the echo that follows a programmatic set,
+      // which is not the user typing — so the sparkle survives it.
+      if (!isProgrammaticAmountRef.current) {
+        clearAiFilled('amount');
+      }
+
       isProgrammaticAmountRef.current = false;
       setAmount(sanitized);
       return;
     }
+
+    clearAiFilled('amount');
 
     const previousLength = amount.length;
     const cursor = amountSelectionRef.current.start;
@@ -760,18 +808,17 @@ export default function AddTransactionModal({
     setAmountSelection({ start: nextCursor, end: nextCursor });
   }
 
-  /** Single entry point for both the typed and the spoken request. */
-  async function runAI(parts: AIPart[]) {
+  /**
+   * Single entry point for the typed, the spoken and the scanned request. Each
+   * caller supplies its own fetch-and-parse step, because a receipt answers
+   * with ids while voice and text answer with names.
+   */
+  async function runAI(request: () => Promise<AIResult>) {
     setFormError(null);
     setIsParsing(true);
 
     try {
-      const { action, values } = parseTransactionResponse(
-        await askGemini(parts),
-        activeCategories,
-        assets,
-        date,
-      );
+      const { action, values, aiFilled: filled } = await request();
 
       if (action === 'cancel') {
         onClose();
@@ -784,7 +831,7 @@ export default function AddTransactionModal({
 
       const resolved = { ...values, title: values.title || title };
 
-      applyValues(resolved);
+      applyValues(resolved, filled);
 
       if (action === 'save') {
         // `applyValues` has only queued its state update, so the accounts the AI
@@ -820,12 +867,21 @@ export default function AddTransactionModal({
 
     Keyboard.dismiss();
 
-    if (await runAI([buildTransactionPrompt(activeCategories, assets, text)])) {
+    const parsed = await runAI(async () =>
+      parseTransactionResponse(
+        await requestTransactionParse({ categories: activeCategories, assets, text }),
+        activeCategories,
+        assets,
+        date,
+      ),
+    );
+
+    if (parsed) {
       setAiInput('');
     }
   }
 
-  /** Scan Receipt pill: image in, straight through the same `runAI` path as voice/text. */
+  /** Scan Receipt: Gemini Vision reads the photo, then the same `runAI` path fills the form. */
   async function handleScanReceipt() {
     if (isAIBusy || isRecording) {
       return;
@@ -839,10 +895,14 @@ export default function AddTransactionModal({
       }
 
       setIsScanningReceipt(true);
-      await runAI([
-        { inlineData: { mimeType: image.mimeType, data: image.base64 } },
-        buildTransactionPrompt(activeCategories, assets),
-      ]);
+      await runAI(async () =>
+        parseReceiptResponse(
+          await requestReceiptScan({ image, categories: activeCategories, assets }),
+          activeCategories,
+          assets,
+          date,
+        ),
+      );
     } catch (error) {
       reportAIError(error);
     } finally {
@@ -988,6 +1048,7 @@ export default function AddTransactionModal({
 
   function handleSelectCategory(category: Category) {
     setSelectedCategory(category);
+    clearAiFilled('category');
     setType(category.type);
     setShowCategoryPicker(false);
   }
@@ -1004,6 +1065,7 @@ export default function AddTransactionModal({
 
     if (nextType === 'transfer') {
       setSelectedCategory(null);
+      clearAiFilled('category');
       setInstallments('1');
       return;
     }
@@ -1017,6 +1079,7 @@ export default function AddTransactionModal({
 
     if (selectedCategory && selectedCategory.type !== nextType) {
       setSelectedCategory(null);
+      clearAiFilled('category');
     }
   }
 
@@ -1027,6 +1090,7 @@ export default function AddTransactionModal({
 
   function handleSelectAsset(asset: Asset) {
     setSelectedAsset(asset);
+    clearAiFilled('asset');
     setShowAssetPicker(false);
 
     // The two sides of a transfer must differ, so a clash drops the destination
@@ -1075,6 +1139,7 @@ export default function AddTransactionModal({
 
   function handleSelectCurrency(option: CurrencyOption) {
     setCurrency(option.id);
+    clearAiFilled('currency');
     setShowCurrencyPicker(false);
     setFormError(null);
   }
@@ -1086,6 +1151,7 @@ export default function AddTransactionModal({
 
   function handleDateValueChange(_event: DateTimePickerChangeEvent, selectedDate: Date) {
     setDate(selectedDate);
+    clearAiFilled('date');
 
     // Android shows a dialog that closes itself after a choice.
     if (Platform.OS === 'android') {
@@ -1149,6 +1215,13 @@ export default function AddTransactionModal({
                   editable={!isInvestmentPurchase}
                   autoFocus={!isInvestmentPurchase}
                 />
+                {aiFilled.has('amount') ? (
+                  <AiSparkle
+                    colors={colors}
+                    size={18}
+                    label={i18n.t('addTransaction.aiFilledField')}
+                  />
+                ) : null}
               </View>
               {isInvestmentPurchase ? (
                 <View style={styles.baseHint}>
@@ -1186,14 +1259,22 @@ export default function AddTransactionModal({
                 colors={colors}
                 icon={<Type color={colors.textMuted} size={20} />}
                 label={i18n.t('addTransaction.titleLabel')}>
-                <TextInput
-                  style={styles.rowInput}
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder={i18n.t('addTransaction.titlePlaceholder')}
-                  placeholderTextColor={colors.placeholder}
-                  returnKeyType="done"
-                />
+                <View style={styles.aiInputRow}>
+                  {aiFilled.has('title') ? (
+                    <AiSparkle colors={colors} label={i18n.t('addTransaction.aiFilledField')} />
+                  ) : null}
+                  <TextInput
+                    style={styles.rowInput}
+                    value={title}
+                    onChangeText={(text) => {
+                      clearAiFilled('title');
+                      setTitle(text);
+                    }}
+                    placeholder={i18n.t('addTransaction.titlePlaceholder')}
+                    placeholderTextColor={colors.placeholder}
+                    returnKeyType="done"
+                  />
+                </View>
               </FormRow>
 
               <FormRow
@@ -1202,9 +1283,14 @@ export default function AddTransactionModal({
                 icon={<CircleDollarSign color={colors.textMuted} size={20} />}
                 label={i18n.t('addTransaction.currency')}
                 onPress={handleOpenCurrencyPicker}>
-                <Text style={styles.rowText}>
-                  {CURRENCY_META[currency].symbol} {currency}
-                </Text>
+                <View style={styles.aiValueRow}>
+                  {aiFilled.has('currency') ? (
+                    <AiSparkle colors={colors} label={i18n.t('addTransaction.aiFilledField')} />
+                  ) : null}
+                  <Text style={styles.rowText}>
+                    {CURRENCY_META[currency].symbol} {currency}
+                  </Text>
+                </View>
               </FormRow>
 
               <FormRow
@@ -1218,7 +1304,12 @@ export default function AddTransactionModal({
                 }
                 onPress={handleOpenAssetPicker}>
                 {selectedAsset ? (
-                  <Text style={styles.rowText}>{formatAssetLabel(selectedAsset)}</Text>
+                  <View style={styles.aiValueRow}>
+                    {aiFilled.has('asset') ? (
+                      <AiSparkle colors={colors} label={i18n.t('addTransaction.aiFilledAccount')} />
+                    ) : null}
+                    <Text style={styles.rowText}>{formatAssetLabel(selectedAsset)}</Text>
+                  </View>
                 ) : (
                   <Text style={styles.rowPlaceholder}>{i18n.t('addTransaction.selectAsset')}</Text>
                 )}
@@ -1248,9 +1339,17 @@ export default function AddTransactionModal({
                   label={i18n.t('addTransaction.category')}
                   onPress={handleOpenCategoryPicker}>
                   {selectedCategory ? (
-                    <Text style={styles.rowText}>
-                      {selectedCategory.icon} {resolveCategoryName(selectedCategory)}
-                    </Text>
+                    <View style={styles.aiValueRow}>
+                      {aiFilled.has('category') ? (
+                        <AiSparkle
+                          colors={colors}
+                          label={i18n.t('addTransaction.aiSuggestedCategory')}
+                        />
+                      ) : null}
+                      <Text style={styles.rowText}>
+                        {selectedCategory.icon} {resolveCategoryName(selectedCategory)}
+                      </Text>
+                    </View>
                   ) : (
                     <Text style={styles.rowPlaceholder}>
                       {i18n.t('addTransaction.selectCategory')}
@@ -1266,7 +1365,12 @@ export default function AddTransactionModal({
                 label={i18n.t('addTransaction.date')}
                 onPress={handleOpenDatePicker}
                 isLast={!canSplitIntoInstallments}>
-                <Text style={styles.rowText}>{formatDate(date)}</Text>
+                <View style={styles.aiValueRow}>
+                  {aiFilled.has('date') ? (
+                    <AiSparkle colors={colors} label={i18n.t('addTransaction.aiFilledField')} />
+                  ) : null}
+                  <Text style={styles.rowText}>{formatDate(date)}</Text>
+                </View>
               </FormRow>
 
               {/* Splits a new expense or income into equal monthly payments. Not
@@ -1536,12 +1640,12 @@ export default function AddTransactionModal({
             </View>
           ) : null}
 
-          <CategoryPicker
+          <CategoryGroupPicker
             visible={showCategoryPicker}
             categories={activeCategories}
             selectedId={selectedCategory?.id}
+            suggestedId={suggestedCategory?.id ?? null}
             tab={categoryTab}
-            styles={styles}
             onChangeTab={setCategoryTab}
             onSelect={handleSelectCategory}
             onClose={() => setShowCategoryPicker(false)}
@@ -1874,6 +1978,22 @@ function createStyles(colors: ColorTokens) {
     rowText: {
       fontSize: 15,
       color: colors.text,
+    },
+    // A value preceded by its AI sparkle. Sits inside `rowValue`, which already
+    // pushes it to the right edge of the row.
+    aiValueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    // Same, for a row whose value is a text field: stretched so the input keeps
+    // the full width to type in rather than shrinking to its content.
+    aiInputRow: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: spacing.xs,
     },
     rowPlaceholder: {
       fontSize: 15,

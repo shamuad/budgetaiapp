@@ -1,6 +1,5 @@
 import { i18n } from '@budgetaiapp/shared';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Camera, Mic, Send, Sparkles, X } from 'lucide-react-native';
+import { Mic, ScanLine, Send, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, {
@@ -17,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { radius, spacing, TOUCH_TARGET } from '../theme';
+import { spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorScheme, type ColorTokens } from '../theming';
 
 type DockMode = 'hub' | 'text';
@@ -41,24 +40,28 @@ type SmartDockProps = {
   onScan: () => void;
 };
 
-const PILL_GRADIENTS: Record<ColorScheme, Record<'text' | 'voice' | 'scan', [string, string]>> = {
+// Each action keeps a single, subtle tint on its icon only — the button
+// itself stays a neutral glass chip, so the row reads as one calm, minimal
+// instrument cluster rather than three loud, competing pills.
+const DOCK_ICON_TINT: Record<ColorScheme, Record<'text' | 'voice' | 'scan', string>> = {
   light: {
-    text: ['#818CF8', '#4F46E5'],
-    voice: ['#FB7185', '#E11D48'],
-    scan: ['#2DD4BF', '#059669'],
+    text: '#6366F1',
+    voice: '#E11D48',
+    scan: '#059669',
   },
   dark: {
-    text: ['#A78BFA', '#6366F1'],
-    voice: ['#FB7185', '#F43F5E'],
-    scan: ['#5EEAD4', '#14B8A6'],
+    text: '#A78BFA',
+    voice: '#FB7185',
+    scan: '#5EEAD4',
   },
 };
 
 /**
- * Unified AI Hub: a glass dock with three pills (Smart Text, Voice, Scan
- * Receipt) that all delegate to the existing AI/voice functions passed in as
- * props. This component owns no AI state of its own beyond which of its two
- * local UI modes ("hub" pills vs. the text composer) is showing.
+ * Unified AI Hub: a floating glass dock with three icon-only actions (Smart
+ * Text, Voice, Scan Receipt) that all delegate to the existing AI/voice
+ * functions passed in as props. This component owns no AI state of its own
+ * beyond which of its two local UI modes ("hub" icons vs. the text composer)
+ * is showing.
  */
 export default function SmartDock({
   visible,
@@ -75,7 +78,7 @@ export default function SmartDock({
   const { colors, scheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, scheme), [colors, scheme]);
-  const gradients = PILL_GRADIENTS[scheme];
+  const tints = DOCK_ICON_TINT[scheme];
   const [mode, setMode] = useState<DockMode>('hub');
   const inputRef = useRef<TextInput>(null);
 
@@ -167,35 +170,29 @@ export default function SmartDock({
             <ProcessingState styles={styles} colors={colors} />
           </Animated.View>
         ) : (
-          <Animated.View entering={FadeIn.duration(220)} style={styles.pills}>
-            <DockPill
+          <Animated.View entering={FadeIn.duration(220)} style={styles.iconRow}>
+            <DockIconButton
               label={i18n.t('addTransaction.smartText')}
-              colors={gradients.text}
               onPress={() => setMode('text')}
               disabled={isBusy}
-              styles={styles}
-              iconColor={colors.onBrand}>
-              <Sparkles color={colors.onBrand} size={16} />
-            </DockPill>
-            <DockPill
+              styles={styles}>
+              <Sparkles color={tints.text} size={20} strokeWidth={2} />
+            </DockIconButton>
+            <DockIconButton
               label={i18n.t('addTransaction.voice')}
-              colors={gradients.voice}
               disabled={isBusy}
               styles={styles}
-              iconColor={colors.onBrand}
               onPressIn={handleVoicePressIn}
               onPressOut={handleVoicePressOut}>
-              <Mic color={colors.onBrand} size={16} />
-            </DockPill>
-            <DockPill
+              <Mic color={tints.voice} size={20} strokeWidth={2} />
+            </DockIconButton>
+            <DockIconButton
               label={i18n.t('addTransaction.scanReceipt')}
-              colors={gradients.scan}
               onPress={onScan}
               disabled={isBusy || isRecording}
-              styles={styles}
-              iconColor={colors.onBrand}>
-              <Camera color={colors.onBrand} size={16} />
-            </DockPill>
+              styles={styles}>
+              <ScanLine color={tints.scan} size={20} strokeWidth={2} />
+            </DockIconButton>
           </Animated.View>
         )}
 
@@ -212,11 +209,16 @@ export default function SmartDock({
   );
 }
 
-function DockPill({
+/**
+ * One minimalist, icon-only action: a neutral glass chip (no heavy fill, no
+ * label) that carries only a subtly tinted icon and an `accessibilityLabel`
+ * for the text the pill used to show. `activeOpacity={1}` plus the pressed
+ * dim below keep the voice button's touch target visually and functionally
+ * unchanged mid-gesture — hold-to-talk depends on it never swapping shape.
+ */
+function DockIconButton({
   label,
-  colors,
   styles,
-  iconColor,
   disabled,
   onPress,
   onPressIn,
@@ -224,9 +226,7 @@ function DockPill({
   children,
 }: {
   label: string;
-  colors: [string, string];
   styles: ReturnType<typeof createStyles>;
-  iconColor: string;
   disabled?: boolean;
   onPress?: () => void;
   onPressIn?: () => void;
@@ -235,27 +235,17 @@ function DockPill({
 }) {
   return (
     <TouchableOpacity
-      activeOpacity={1}
-      style={[styles.pillHit, disabled && styles.pillDisabled]}
+      activeOpacity={0.6}
+      style={[styles.iconChip, disabled && styles.iconChipDisabled]}
       onPress={onPress}
       onPressIn={onPressIn}
       onPressOut={onPressOut}
       disabled={disabled}
       delayPressIn={0}
-      hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       accessibilityRole="button"
       accessibilityLabel={label}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={colors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.pill}>
-        {children}
-        <Text style={[styles.pillLabel, { color: iconColor }]} numberOfLines={1}>
-          {label}
-        </Text>
-      </LinearGradient>
+      {children}
     </TouchableOpacity>
   );
 }
@@ -391,51 +381,54 @@ const waveStyles = StyleSheet.create({
 
 function createStyles(colors: ColorTokens, scheme: ColorScheme) {
   return StyleSheet.create({
+    // No top border, no page-matching fill on the dock itself below — the
+    // card's own shadow and radius are what separate it from the form above,
+    // so it reads as floating rather than as an attached bottom bar.
     wrap: {
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.lg,
       paddingTop: spacing.sm,
       backgroundColor: colors.background,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
     },
+    // A rounder, capsule-like radius than the rest of the app's cards — this
+    // is the one surface meant to feel like a floating action bar rather
+    // than a docked panel.
     dock: {
       minHeight: TOUCH_TARGET + 8,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
-      borderRadius: radius.lg,
+      borderRadius: 26,
       backgroundColor: scheme === 'dark' ? colors.surfaceElevated : colors.surface,
       borderWidth: 1,
       borderColor: colors.borderGlass,
       shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: scheme === 'dark' ? 0.28 : 0.1,
-      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: scheme === 'dark' ? 0.32 : 0.12,
+      shadowRadius: 20,
       elevation: 8,
       overflow: 'hidden',
     },
-    pills: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    pillHit: {
-      flex: 1,
-    },
-    pillDisabled: {
-      opacity: 0.45,
-    },
-    pill: {
-      minHeight: TOUCH_TARGET,
-      paddingHorizontal: spacing.sm,
-      borderRadius: 999,
+    iconRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
+      gap: spacing.xl,
+      minHeight: TOUCH_TARGET,
     },
-    pillLabel: {
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: -0.1,
+    // Neutral, translucent glass chip — the same `surfaceGlass`/`borderGlass`
+    // tokens the composer's cancel button already uses — so only the icon
+    // itself carries any color.
+    iconChip: {
+      width: TOUCH_TARGET,
+      height: TOUCH_TARGET,
+      borderRadius: TOUCH_TARGET / 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceGlass,
+      borderWidth: 1,
+      borderColor: colors.borderGlass,
+    },
+    iconChipDisabled: {
+      opacity: 0.4,
     },
     composer: {
       flexDirection: 'row',

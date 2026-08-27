@@ -1,14 +1,34 @@
 /**
- * Gemini proxy: the only place the API key exists.
+ * The AI microservice: the only place the API key and the prompts exist.
  *
  * The mobile app used to hold `EXPO_PUBLIC_GEMINI_API_KEY` and talk to Google
  * directly, which shipped the key inside the JS bundle for anyone to read.
- * The app now posts the same multimodal `parts` here and gets back the raw
- * model text, so `parseTransactionResponse` on the client is untouched.
+ * Callers now post structured data under an `action` and get back the raw
+ * model text, so a second client (the web app) can reuse every flow without
+ * carrying its own copy of the wording. See `prompts.ts`.
+ *
+ *   { action: 'parse_transaction', categories, accounts, text | audio_base64, today, weekday }
+ *   { action: 'categorize',        categories, type, title }
+ *   { action: 'scan_receipt',      categories, accounts, image_base64, image_mime_type, today, weekday }
+ *   { parts: [...] }  -- legacy: prompts built client-side, still honoured so
+ *                        an already-installed app build keeps working.
+ *
+ * Every action answers with `{ text }`: the model's JSON as a string. Mapping
+ * that back onto categories and accounts stays with the caller, which is where
+ * those records are loaded.
  *
  * Deploy:  supabase functions deploy ask-gemini
  * Secret:  supabase secrets set GEMINI_API_KEY=...
  */
+
+import {
+  buildCategorizePrompt,
+  buildReceiptPrompt,
+  buildTransactionPrompt,
+  type PromptAccount,
+  type PromptCategory,
+  type PromptToday,
+} from './prompts.ts';
 
 // `gemini-flash-latest` used to be the primary and is deliberately gone: on this
 // key it accepts the connection and then never answers, timing out on every
@@ -89,6 +109,160 @@ function toGeminiParts(parts: unknown): GeminiPart[] {
   }, []);
 }
 
+type RequestBody = {
+  action?: unknown;
+  parts?: unknown;
+  categories?: unknown;
+  accounts?: unknown;
+  text?: unknown;
+  title?: unknown;
+  type?: unknown;
+  audio_base64?: unknown;
+  audio_mime_type?: unknown;
+  image_base64?: unknown;
+  image_mime_type?: unknown;
+  today?: unknown;
+  weekday?: unknown;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Drops anything malformed rather than sending a half-built list to the model. */
+function toPromptCategories(value: unknown): PromptCategory[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.reduce<PromptCategory[]>((accumulated, raw) => {
+    const id = asString((raw as PromptCategory)?.id);
+    const name = asString((raw as PromptCategory)?.name);
+    const type = (raw as PromptCategory)?.type;
+
+    if (id && name && (type === 'expense' || type === 'income')) {
+      accumulated.push({ id, name, type });
+    }
+
+    return accumulated;
+  }, []);
+}
+
+function toPromptAccounts(value: unknown): PromptAccount[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.reduce<PromptAccount[]>((accumulated, raw) => {
+    const id = asString((raw as PromptAccount)?.id);
+    const name = asString((raw as PromptAccount)?.name);
+    const type = asString((raw as PromptAccount)?.type);
+
+    if (id && name) {
+      accumulated.push({ id, name, type: type || null });
+    }
+
+    return accumulated;
+  }, []);
+}
+
+/**
+ * The caller's own calendar day. Falling back to the isolate's clock would date
+ * a late-evening entry in UTC+2 a day early, which is exactly why the client
+ * sends this.
+ */
+function toPromptToday(body: RequestBody): PromptToday {
+  const date = asString(body.today);
+  const weekday = asString(body.weekday);
+
+  if (ISO_DATE.test(date) && weekday) {
+    return { date, weekday };
+  }
+
+  const now = new Date();
+
+  return {
+    date: now.toISOString().slice(0, 10),
+    weekday: now.toLocaleDateString('en-US', { weekday: 'long' }),
+  };
+}
+
+/**
+ * Turns one request into the parts Gemini receives. Media always leads and the
+ * prompt follows, the order the models were tuned against here.
+ * Throws on a malformed request, which the handler reports as a 400.
+ */
+function buildParts(body: RequestBody): GeminiPart[] {
+  const action = asString(body.action);
+
+  if (!action) {
+    return toGeminiParts(body.parts);
+  }
+
+  if (action === 'parse_transaction') {
+    const text = asString(body.text);
+    const audio = asString(body.audio_base64);
+
+    if (!text && !audio) {
+      throw new Error('parse_transaction needs either "text" or "audio_base64".');
+    }
+
+    const prompt = buildTransactionPrompt(
+      toPromptCategories(body.categories),
+      toPromptAccounts(body.accounts),
+      toPromptToday(body),
+      text || undefined,
+    );
+
+    if (!audio) {
+      return [{ text: prompt }];
+    }
+
+    return [
+      { inlineData: { mimeType: asString(body.audio_mime_type) || 'audio/m4a', data: audio } },
+      { text: prompt },
+    ];
+  }
+
+  if (action === 'categorize') {
+    const title = asString(body.title);
+    const type = body.type;
+
+    if (type !== 'expense' && type !== 'income') {
+      throw new Error('categorize needs "type" to be "expense" or "income".');
+    }
+
+    if (!title) {
+      throw new Error('categorize needs a "title".');
+    }
+
+    return [{ text: buildCategorizePrompt(toPromptCategories(body.categories), type, title) }];
+  }
+
+  if (action === 'scan_receipt') {
+    const image = asString(body.image_base64);
+
+    if (!image) {
+      throw new Error('scan_receipt needs "image_base64".');
+    }
+
+    return [
+      { inlineData: { mimeType: asString(body.image_mime_type) || 'image/jpeg', data: image } },
+      {
+        text: buildReceiptPrompt(
+          toPromptCategories(body.categories),
+          toPromptAccounts(body.accounts),
+          toPromptToday(body),
+        ),
+      },
+    ];
+  }
+
+  throw new Error(`Unknown action "${action}".`);
+}
+
 /** The model's answer is a JSON document delivered as text, possibly across several parts. */
 function readResponseText(payload: unknown): string {
   const parts = (payload as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
@@ -152,18 +326,29 @@ Deno.serve(async (request) => {
       );
     }
 
-    let parts: GeminiPart[] = [];
+    let body: RequestBody;
 
     try {
-      const body = await request.json();
-      parts = toGeminiParts(body?.parts);
+      body = ((await request.json()) ?? {}) as RequestBody;
     } catch {
-      return json({ error: 'invalid_body', message: 'Expected JSON shaped like { parts: [...] }.' }, 400);
+      return json({ error: 'invalid_body', message: 'The request body was not valid JSON.' }, 400);
+    }
+
+    let parts: GeminiPart[];
+
+    try {
+      parts = buildParts(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      return json({ error: 'invalid_body', message }, 400);
     }
 
     if (parts.length === 0) {
       return json({ error: 'invalid_body', message: 'No usable prompt parts were sent.' }, 400);
     }
+
+    console.log(`ask-gemini: action=${asString(body.action) || 'legacy_parts'}`);
 
     let lastStatus = 503;
     let lastMessage = 'Every model was busy.';

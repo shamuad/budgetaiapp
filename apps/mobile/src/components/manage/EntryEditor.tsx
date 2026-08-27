@@ -33,6 +33,8 @@ export type EntryDraft<T extends string> = {
   icon: string;
   type: T;
   customColor?: string | null;
+  /** Only meaningful when the caller passed `groupOptions` — the 50/30/20 tier for an expense category. */
+  group?: string | null;
 };
 
 type EntryEditorProps<T extends string> = {
@@ -46,6 +48,14 @@ type EntryEditorProps<T extends string> = {
   iconChoices: string[];
   /** When true, matches the name against `brandDictionary` and swaps in a favicon logo. */
   enableBrandDetect?: boolean;
+  /**
+   * Renders a required "Budget Group" segmented control (e.g. Needs/Wants)
+   * while `type` equals `groupRequiredForType` — used only for expense
+   * categories, which is why this stays a plain string rather than another
+   * generic: there's exactly one caller that needs it.
+   */
+  groupOptions?: { id: string; label: string }[];
+  groupRequiredForType?: T;
   isSaving: boolean;
   onSave: (draft: EntryDraft<T>) => void;
   /** Omitted while creating, since there is nothing to remove yet. */
@@ -86,6 +96,8 @@ export default function EntryEditor<T extends string>({
   typeOptions,
   iconChoices,
   enableBrandDetect = false,
+  groupOptions,
+  groupRequiredForType,
   isSaving,
   onSave,
   onDelete,
@@ -99,6 +111,10 @@ export default function EntryEditor<T extends string>({
     isRemoteIcon(initial.icon) ? iconChoices[0] : initial.icon || iconChoices[0],
   );
   const [type, setType] = useState<T>(initial.type);
+  // Empty string, not null, so it never accidentally matches a real option id
+  // and forces an explicit tap before a new expense category can be saved.
+  const [group, setGroup] = useState(initial.group ?? '');
+  const showGroupRow = Boolean(groupOptions) && type === groupRequiredForType;
   const [detectedBrand, setDetectedBrand] = useState<BrandEntry | null>(() =>
     initialBrand(initial.name, initial.icon, enableBrandDetect),
   );
@@ -239,11 +255,17 @@ export default function EntryEditor<T extends string>({
       return;
     }
 
+    if (showGroupRow && !group) {
+      Alert.alert(i18n.t('common.errorTitle'), i18n.t('manage.missingGroup'));
+      return;
+    }
+
     onSave({
       name: trimmedName,
       icon: trimmedIcon,
       type,
       customColor: enableBrandDetect ? draftCustomColor : null,
+      group: groupOptions ? group || null : undefined,
     });
   };
 
@@ -368,10 +390,16 @@ export default function EntryEditor<T extends string>({
                 onReset={resetDraftCustomColor}
               />
             ) : null}
-            <View style={[styles.row, styles.rowLast, styles.rowStacked]}>
+            <View style={[styles.row, !showGroupRow && styles.rowLast, styles.rowStacked]}>
               <Text style={styles.rowLabel}>{i18n.t('manage.kind')}</Text>
               <SegmentedControl options={typeOptions} value={type} onChange={setType} />
             </View>
+            {showGroupRow ? (
+              <View style={[styles.row, styles.rowLast, styles.rowStacked]}>
+                <Text style={styles.rowLabel}>{i18n.t('manage.budgetGroup')}</Text>
+                <SegmentedControl options={groupOptions!} value={group} onChange={setGroup} />
+              </View>
+            ) : null}
           </View>
 
           {onDelete && (

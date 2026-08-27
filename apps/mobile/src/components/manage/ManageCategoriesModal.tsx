@@ -1,8 +1,12 @@
 import {
+  BUDGET_GROUP_TONE,
+  budgetGroupLabel,
   Category,
+  CategoryGroup,
   CategoryType,
   countCategoryTransactions,
   DEFAULT_CATEGORY_ICONS,
+  groupCategoriesByBudgetGroup,
   i18n,
   resolveCategoryName,
   sortCategoriesByName,
@@ -16,15 +20,23 @@ import {
 } from '@budgetaiapp/shared';
 import { ChevronLeft, ChevronRight, Globe, Plus, RotateCcw } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { categoryTypeOptions } from '../../lib/labels';
+import { categoryGroupOptions, categoryTypeOptions } from '../../lib/labels';
 import { radius, spacing, TOUCH_TARGET } from '../../theme';
 import { useAppTheme, type ColorTokens } from '../../theming';
 import SegmentedControl from '../SegmentedControl';
 import EntryEditor, { EntryDraft } from './EntryEditor';
+
+type CategorySection = {
+  key: string;
+  title: string;
+  tone: string | null;
+  kind: 'active' | 'inactive';
+  data: Category[];
+};
 
 // Covers both directions: everyday spending plus the usual income sources.
 const CATEGORY_ICONS = [
@@ -69,6 +81,44 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
   const activeCategories = sortCategoriesByName(filtered.filter((category) => category.is_active !== false));
   const inactiveCategories = sortCategoriesByName(filtered.filter((category) => category.is_active === false));
 
+  // Expense categories split into their Needs/Wants sticky-header sections;
+  // income has no 50/30/20 tier, so it stays one flat "Active" section.
+  const sections: CategorySection[] = useMemo(() => {
+    const list: CategorySection[] = [];
+
+    if (filter === 'expense') {
+      for (const { group, items } of groupCategoriesByBudgetGroup(activeCategories)) {
+        list.push({
+          key: `active-${group}`,
+          title: group === 'other' ? i18n.t('manage.activeCategories') : budgetGroupLabel(group),
+          tone: group === 'other' ? null : BUDGET_GROUP_TONE[group],
+          kind: 'active',
+          data: items,
+        });
+      }
+    } else if (activeCategories.length > 0) {
+      list.push({
+        key: 'active-income',
+        title: i18n.t('manage.activeCategories'),
+        tone: null,
+        kind: 'active',
+        data: activeCategories,
+      });
+    }
+
+    if (inactiveCategories.length > 0) {
+      list.push({
+        key: 'inactive',
+        title: i18n.t('manage.inactiveCategories'),
+        tone: null,
+        kind: 'inactive',
+        data: inactiveCategories,
+      });
+    }
+
+    return list;
+  }, [filter, activeCategories, inactiveCategories]);
+
   const usageCount = (categoryId: string) =>
     transactions.filter((row) => row.category_id === categoryId).length;
 
@@ -79,12 +129,29 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
   const staysDefault = (original: Category, draft: EntryDraft<CategoryType>) =>
     !original.is_custom && Boolean(original.translation_key) && draft.name === resolveCategoryName(original);
 
+  // A custom category's color always follows its group. A default category
+  // keeps its own specific tone (e.g. Rent's indigo) unless its group is
+  // actually being changed, in which case it takes on the new group's tone.
+  const colorForGroup = (group: CategoryGroup, original: Category | null): string =>
+    original && original.group_code === group && original.color_code
+      ? original.color_code
+      : BUDGET_GROUP_TONE[group];
+
   const handleSave = async (draft: EntryDraft<CategoryType>) => {
     setIsSaving(true);
 
     try {
+      const original = isCreating ? null : target;
+      const group = draft.type === 'expense' ? (draft.group as CategoryGroup | null) : null;
+
       if (isCreating) {
-        await createCategoryMutation.mutateAsync({ name: draft.name, type: draft.type, icon: draft.icon });
+        await createCategoryMutation.mutateAsync({
+          name: draft.name,
+          type: draft.type,
+          icon: draft.icon,
+          group_code: group,
+          color_code: group ? colorForGroup(group, original) : null,
+        });
       } else if (target) {
         const keepsDefault = staysDefault(target, draft);
 
@@ -96,6 +163,8 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
             icon: draft.icon,
             is_custom: !keepsDefault,
             translation_key: keepsDefault ? target.translation_key : null,
+            group_code: group,
+            color_code: group ? colorForGroup(group, original) : null,
           },
         });
       }
@@ -197,12 +266,13 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
                 title={isCreating ? i18n.t('manage.newCategory') : i18n.t('manage.editCategory')}
                 initial={
                   isCreating
-                    ? { name: '', icon: '', type: filter, customColor: null }
+                    ? { name: '', icon: '', type: filter, customColor: null, group: null }
                     : {
                         name: resolveCategoryName(target),
                         icon: target.icon ?? '',
                         type: target.type,
                         customColor: null,
+                        group: target.group_code,
                       }
                 }
                 defaultIcon={
@@ -210,6 +280,8 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
                 }
                 typeOptions={categoryTypeOptions()}
                 iconChoices={CATEGORY_ICONS}
+                groupOptions={categoryGroupOptions()}
+                groupRequiredForType="expense"
                 isSaving={isSaving}
                 onSave={handleSave}
                 onDelete={isCreating ? undefined : handleDeleteOrHide}
@@ -233,70 +305,85 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
                   style={styles.filter}
                 />
 
-                <ScrollView contentContainerStyle={styles.content}>
-                  <Text style={styles.sectionTitle}>{i18n.t('manage.activeCategories')}</Text>
-
-                  {activeCategories.length === 0 ? (
-                    <Text style={styles.empty}>{i18n.t('manage.empty')}</Text>
-                  ) : (
-                    <View style={styles.card}>
-                      {activeCategories.map((category, index) => (
-                        <TouchableOpacity
-                          key={category.id}
-                          activeOpacity={0.6}
-                          onPress={() => setTarget(category)}
-                          style={[styles.row, index > 0 && styles.rowDivided]}>
-                          <Text style={styles.rowIcon}>{category.icon}</Text>
-                          <View style={styles.rowText}>
-                            <View style={styles.rowNameLine}>
-                              <Text style={styles.rowName} numberOfLines={1}>
-                                {resolveCategoryName(category)}
-                              </Text>
-                              {!category.is_custom && (
-                                <Globe
-                                  color={colors.textMuted}
-                                  size={13}
-                                  accessibilityLabel={i18n.t('manage.translatable')}
-                                />
-                              )}
-                            </View>
-                            <Text style={styles.rowSubtitle} numberOfLines={1}>
-                              {i18n.t('manage.usage', { count: usageCount(category.id) })}
-                            </Text>
-                          </View>
-                          <ChevronRight color={colors.chevron} size={18} />
-                        </TouchableOpacity>
-                      ))}
+                <SectionList
+                  sections={sections}
+                  keyExtractor={(category) => category.id}
+                  stickySectionHeadersEnabled
+                  contentContainerStyle={styles.content}
+                  ListHeaderComponent={
+                    activeCategories.length === 0 ? (
+                      <>
+                        <Text style={styles.sectionTitle}>{i18n.t('manage.activeCategories')}</Text>
+                        <Text style={styles.empty}>{i18n.t('manage.empty')}</Text>
+                      </>
+                    ) : null
+                  }
+                  renderSectionHeader={({ section }) => (
+                    <View
+                      style={[
+                        styles.sectionHeader,
+                        section.key !== sections[0]?.key && styles.sectionHeaderSpaced,
+                        section.tone ? { borderLeftColor: section.tone } : styles.sectionHeaderNoTone,
+                      ]}>
+                      <Text style={styles.sectionHeaderText}>{section.title}</Text>
                     </View>
                   )}
+                  renderItem={({ item: category, index, section }) => {
+                    const edgeStyle = [
+                      styles.row,
+                      index === 0 && styles.rowFirst,
+                      index === section.data.length - 1 && styles.rowLast,
+                      index > 0 && styles.rowDivided,
+                    ];
 
-                  {inactiveCategories.length > 0 && (
-                    <>
-                      <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
-                        {i18n.t('manage.inactiveCategories')}
-                      </Text>
-                      <View style={styles.card}>
-                        {inactiveCategories.map((category, index) => (
-                          <View key={category.id} style={[styles.row, index > 0 && styles.rowDivided]}>
-                            <Text style={[styles.rowIcon, styles.rowIconInactive]}>{category.icon}</Text>
-                            <View style={styles.rowText}>
-                              <Text style={styles.rowNameInactive} numberOfLines={1}>
-                                {resolveCategoryName(category)}
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              onPress={() => handleRestore(category)}
-                              style={styles.restoreButton}>
-                              <RotateCcw color={colors.tint} size={14} />
-                              <Text style={styles.restoreButtonText}>{i18n.t('manage.restore')}</Text>
-                            </TouchableOpacity>
+                    if (section.kind === 'inactive') {
+                      return (
+                        <View key={category.id} style={edgeStyle}>
+                          <Text style={[styles.rowIcon, styles.rowIconInactive]}>{category.icon}</Text>
+                          <View style={styles.rowText}>
+                            <Text style={styles.rowNameInactive} numberOfLines={1}>
+                              {resolveCategoryName(category)}
+                            </Text>
                           </View>
-                        ))}
-                      </View>
-                    </>
-                  )}
-                </ScrollView>
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => handleRestore(category)}
+                            style={styles.restoreButton}>
+                            <RotateCcw color={colors.tint} size={14} />
+                            <Text style={styles.restoreButtonText}>{i18n.t('manage.restore')}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        activeOpacity={0.6}
+                        onPress={() => setTarget(category)}
+                        style={edgeStyle}>
+                        <Text style={styles.rowIcon}>{category.icon}</Text>
+                        <View style={styles.rowText}>
+                          <View style={styles.rowNameLine}>
+                            <Text style={styles.rowName} numberOfLines={1}>
+                              {resolveCategoryName(category)}
+                            </Text>
+                            {!category.is_custom && (
+                              <Globe
+                                color={colors.textMuted}
+                                size={13}
+                                accessibilityLabel={i18n.t('manage.translatable')}
+                              />
+                            )}
+                          </View>
+                          <Text style={styles.rowSubtitle} numberOfLines={1}>
+                            {i18n.t('manage.usage', { count: usageCount(category.id) })}
+                          </Text>
+                        </View>
+                        <ChevronRight color={colors.chevron} size={18} />
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
 
                 <View style={styles.footer}>
                   <TouchableOpacity
@@ -360,8 +447,28 @@ function createStyles(colors: ColorTokens) {
       letterSpacing: 0.4,
       marginBottom: spacing.sm,
     },
-    sectionTitleSpaced: {
-      marginTop: spacing.xl,
+    // A colored left accent identifies Needs vs Wants at a glance; "Other" and
+    // income sections fall back to a neutral border instead of a tone.
+    sectionHeader: {
+      justifyContent: 'center',
+      minHeight: 32,
+      paddingLeft: spacing.sm,
+      borderLeftWidth: 3,
+      backgroundColor: colors.background,
+      marginBottom: spacing.sm,
+    },
+    sectionHeaderSpaced: {
+      marginTop: spacing.lg,
+    },
+    sectionHeaderNoTone: {
+      borderLeftColor: colors.border,
+    },
+    sectionHeaderText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
     },
     empty: {
       marginTop: spacing.sm,
@@ -370,20 +477,30 @@ function createStyles(colors: ColorTokens) {
       color: colors.textMuted,
       textAlign: 'center',
     },
-    // A hairline glass edge stands in for the shadow the flat light-mode card used,
-    // which disappears against a dark canvas.
-    card: {
-      backgroundColor: colors.surfaceElevated,
-      borderRadius: radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderGlass,
-      paddingHorizontal: spacing.lg,
-    },
+    // Each row carries its own edges rather than sitting in a wrapping card
+    // View, since a SectionList renders rows and headers as flat siblings —
+    // `rowFirst`/`rowLast` round and close off the top/bottom of each section
+    // so consecutive rows still read as one card.
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
       minHeight: TOUCH_TARGET + 12,
+      paddingHorizontal: spacing.lg,
+      backgroundColor: colors.surfaceElevated,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
+    },
+    rowFirst: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopLeftRadius: radius.lg,
+      borderTopRightRadius: radius.lg,
+    },
+    rowLast: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomLeftRadius: radius.lg,
+      borderBottomRightRadius: radius.lg,
     },
     rowDivided: {
       borderTopWidth: StyleSheet.hairlineWidth,

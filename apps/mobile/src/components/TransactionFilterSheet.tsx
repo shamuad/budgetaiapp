@@ -313,7 +313,7 @@ function FilterSection({
       <View style={styles.chipWrap}>
         {categories.map((category) => {
           const isSelected = selectedIds.includes(category.id);
-          const accent = getCategoryColor(category.name, type);
+          const accent = getCategoryColor(category.name, type, category.color_code);
 
           return (
             <TouchableOpacity

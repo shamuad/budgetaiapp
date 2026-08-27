@@ -96,12 +96,22 @@ function hashString(value: string): number {
 }
 
 /**
- * A fixed, distinct color for a category name — matching between chart slices
- * and list rows everywhere. Known categories use their assigned pastel;
- * anything else (a user's own custom category) still gets a stable color via
- * a name hash, so custom categories never break the visuals.
+ * A fixed, distinct color for a category — matching between chart slices and
+ * list rows everywhere. `colorCode` (the DB column every default expense
+ * category now carries) wins when present. Anything without one — a custom
+ * category, an income category, or a legacy row — falls back to the fixed
+ * pastel lists below, or a stable name hash as a last resort, so nothing ever
+ * renders without a color.
  */
-export function getCategoryColor(name: string | null | undefined, type: CategoryType = 'expense'): string {
+export function getCategoryColor(
+  name: string | null | undefined,
+  type: CategoryType = 'expense',
+  colorCode?: string | null,
+): string {
+  if (colorCode) {
+    return colorCode;
+  }
+
   const trimmed = name?.trim();
 
   if (!trimmed) {

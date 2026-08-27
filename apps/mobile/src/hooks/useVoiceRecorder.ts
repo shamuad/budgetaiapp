@@ -24,6 +24,13 @@ const RECORDING_OPTIONS = {
 
 const MAX_RECORDING_MS = 60_000;
 
+// A push-to-talk release lands as the last syllable is still being spoken, so
+// stopping the mic on that event cuts the tail off the recording. The amount is
+// usually said last ("... otuz iki bin"), and losing that trailing word silently
+// changes the number rather than failing outright, so the mic stays open a
+// moment past the release.
+const TAIL_CAPTURE_MS = 500;
+
 export type VoiceRecording = {
   base64: string;
   mimeType: string;
@@ -78,6 +85,12 @@ export function useVoiceRecorder({ onFinish, onError }: VoiceRecorderOptions) {
 
       try {
         if (recorder.isRecording) {
+          // Only when the clip is going to be transcribed — a cancelled hold is
+          // thrown away, so there is nothing to wait for.
+          if (deliver) {
+            await new Promise((resolve) => setTimeout(resolve, TAIL_CAPTURE_MS));
+          }
+
           await recorder.stop();
         }
 

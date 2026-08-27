@@ -58,7 +58,8 @@ export function toBaseAmount(amount: number, exchangeRate: number) {
 
 /**
  * Parses a typed or AI-returned amount without locale inflation.
- * "42,00" and "42.00" both become 42; "1.234,56" becomes 1234.56.
+ * "42,00" and "42.00" both become 42; "1.234,56" becomes 1234.56;
+ * "1.320.000" becomes 1320000.
  */
 export function parseAmountString(input: string): number {
   let text = input.trim().replace(/[^\d.,]/g, '');
@@ -78,6 +79,10 @@ export function parseAmountString(input: string): number {
       lastComma > lastDot
         ? text.replace(/\./g, '').replace(',', '.')
         : text.replace(/,/g, '');
+  } else if (commaCount > 1 || dotCount > 1) {
+    // Only one separator character is left in play here, and a number carries at
+    // most one decimal point — so repeats are grouping, as in "1.320.000".
+    text = text.replace(/[.,]/g, '');
   } else if (commaCount === 1) {
     const [, fraction = ''] = text.split(',');
     const isThousands = fraction.length === 3 && text.indexOf(',') <= 3;

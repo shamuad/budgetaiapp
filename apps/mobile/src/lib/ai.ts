@@ -11,15 +11,16 @@ import {
   TransactionType,
 } from '@budgetaiapp/shared';
 
-/**
- * One piece of a request: a prompt string, or the base64 audio and receipt
- * images captured by voice input and receipt scanning. Mirrors the shape the
- * `ask-gemini` Edge Function forwards to Gemini, so the app no longer depends
- * on the Google SDK — or on holding an API key.
- */
-export type AIPart = string | { inlineData: { mimeType: string; data: string } };
+/** Base64 media captured by voice input or receipt scanning. */
+export type AIMedia = { base64: string; mimeType: string };
 
 export type AIAction = 'save' | 'cancel' | 'none';
+
+/**
+ * Which form fields the model filled in this round, so the UI can mark them
+ * with a sparkle and drop the mark the moment the user edits one.
+ */
+export type AiFilledField = 'title' | 'amount' | 'currency' | 'date' | 'category' | 'asset';
 
 // A generous ceiling for a monthly installment plan (5 years), so a garbled
 // model response can never blow up into an absurd number of written rows.
@@ -50,6 +51,7 @@ export type TransactionValues = {
 export type AIResult = {
   action: AIAction;
   values: TransactionValues | null;
+  aiFilled: AiFilledField[];
 };
 
 /** The function's error codes, in the user's own language. */
@@ -102,14 +104,14 @@ async function describeFunctionError(error: unknown): Promise<string> {
 }
 
 /**
- * Sends the prompt to the `ask-gemini` Edge Function and returns the raw JSON
- * text the model answered with. The key, the model list, and the fallback to
- * the lite model all live server-side now — see
+ * Posts one intent to the `ask-gemini` Edge Function and returns the raw JSON
+ * text the model answered with. The key, the model list, the fallback to the
+ * lite model and every prompt now live server-side — see
  * `supabase/functions/ask-gemini/index.ts`.
  */
-export async function askGemini(parts: AIPart[]) {
+async function invokeAskGemini(body: Record<string, unknown>) {
   const { data, error } = await getSupabase().functions.invoke<{ text: string }>('ask-gemini', {
-    body: { parts },
+    body,
   });
 
   if (error) {
@@ -123,69 +125,114 @@ export async function askGemini(parts: AIPart[]) {
   return data.text;
 }
 
-export function buildTransactionPrompt(
+/** Only the fields the prompts name, so a receipt image is the heaviest thing on the wire. */
+function toPromptCategories(categories: Category[]) {
+  return categories.map(({ id, name, type }) => ({ id, name, type }));
+}
+
+function toPromptAccounts(assets: Asset[]) {
+  return assets.map(({ id, name, type }) => ({ id, name, type }));
+}
+
+/**
+ * The user's own calendar day. The Edge Function runs in UTC, so leaving it to
+ * work this out would date a late-evening entry in UTC+2 a day early.
+ */
+function todayForPrompt() {
+  const now = new Date();
+
+  return {
+    today: toISODate(now),
+    weekday: now.toLocaleDateString('en-US', { weekday: 'long' }),
+  };
+}
+
+/** Smart Text and Voice: one spoken or typed request, parsed into a full transaction. */
+export function requestTransactionParse({
+  categories,
+  assets,
+  text,
+  audio,
+}: {
+  categories: Category[];
+  assets: Asset[];
+  text?: string;
+  audio?: AIMedia;
+}) {
+  return invokeAskGemini({
+    action: 'parse_transaction',
+    categories: toPromptCategories(categories),
+    accounts: toPromptAccounts(assets),
+    text: text ?? null,
+    audio_base64: audio?.base64 ?? null,
+    audio_mime_type: audio?.mimeType ?? null,
+    ...todayForPrompt(),
+  });
+}
+
+/** The debounced guess behind the Category field. */
+export function requestCategorize(title: string, categories: Category[], type: CategoryType) {
+  return invokeAskGemini({
+    action: 'categorize',
+    categories: toPromptCategories(categories),
+    type,
+    title,
+  });
+}
+
+/** Receipt scanning: Gemini Vision reads the photo and answers with ids. */
+export function requestReceiptScan({
+  image,
+  categories,
+  assets,
+}: {
+  image: AIMedia;
+  categories: Category[];
+  assets: Asset[];
+}) {
+  return invokeAskGemini({
+    action: 'scan_receipt',
+    image_base64: image.base64,
+    image_mime_type: image.mimeType,
+    categories: toPromptCategories(categories),
+    accounts: toPromptAccounts(assets),
+    ...todayForPrompt(),
+  });
+}
+
+/**
+ * Best-effort category guess for a title the user is still typing, so it can
+ * auto-fill while the rest of the form is untouched. Unlike `findCategory`
+ * (used once the user has already committed to saving via the AI parse
+ * flow), an unclear title resolves to null rather than a catch-all category —
+ * a wrong guess here would silently pick something for a field the user
+ * hasn't looked at yet.
+ */
+export async function categorizeTransaction(
+  title: string,
   categories: Category[],
-  assets: Asset[],
-  userText?: string,
-) {
-  const names = (forType: TransactionType) =>
-    categories
-      .filter((item) => item.type === forType)
-      .map((item) => item.name)
-      .join(', ');
+  type: CategoryType,
+): Promise<Category | null> {
+  const responseText = await requestCategorize(title, categories, type);
 
-  const today = new Date();
-  const weekday = today.toLocaleDateString('en-US', { weekday: 'long' });
-  // Naming the kind lets the model tell a brokerage from a current account, which
-  // is what a purchase of a stock or an ETF has to be transferred into.
-  const accountList = assets
-    .map((item) => `${item.name} (${item.type ?? 'account'})`)
-    .join(', ');
-  const investmentAccounts = assets
-    .filter((item) => item.type === 'investment')
-    .map((item) => item.name)
-    .join(', ');
+  let parsed: { category?: string | null };
 
-  return [
-    'You are a financial assistant. Extract the transaction details from the user.',
-    'Respond ONLY with a JSON object shaped like:',
-    '{"title": string, "amount": number, "type": "expense" | "income" | "transfer", "category": string | null, "account_name": string | null, "to_account_name": string | null, "asset_symbol": string | null, "shares": number | null, "unit_price": number | null, "currency": "EUR" | "USD" | "GBP" | "TRY" | null, "installments": number, "date": "YYYY-MM-DD", "action": "save" | "cancel" | "none"}',
-    '"amount" must be a JSON number (never a string) with a dot as the decimal separator, in major currency units.',
-    'Examples: forty-two euros -> 42 or 42.5, never 4200; one thousand -> 1000.',
-    '"currency" must be one of "EUR", "USD", "GBP", "TRY", or null.',
-    'Detect any spoken or written currency (e.g. TL, lira, euro, euros, dollar, pounds) and map it to the correct ISO code.',
-    'Use null when the user does not mention a currency.',
-    `Expense categories: ${names('expense')}.`,
-    `Income categories: ${names('income')}.`,
-    '"category" must be exactly one of those names, copied without any extra words.',
-    `Accounts, with their kind in brackets: ${accountList}.`,
-    'Set "account_name" to exactly one of those account names when the user says which account,',
-    'card, wallet or bank the money moved through. Use null when they do not mention one.',
-    // Buying an asset is not spending: the money is still the user's, it has only
-    // changed form. Booking it as an expense would corrupt net cash flow.
-    'BUYING AN INVESTMENT IS NEVER AN EXPENSE. If the user describes buying a stock,',
-    'an ETF, an index fund, crypto or any other asset (for example "bought S&P 500",',
-    '"put 500 euros into VUSA", "invested in Bitcoin"), then:',
-    'set "type" to "transfer"; set "account_name" to the account the money came from;',
-    `set "to_account_name" to the investment account that receives it${investmentAccounts ? ` (one of: ${investmentAccounts})` : ''};`,
-    'set "asset_symbol" to the asset the user named, as an uppercase market ticker when',
-    'you recognise one (S&P 500 -> "SPY", Bitcoin -> "BTC", VUSA -> "VUSA.AS"), otherwise',
-    'the asset name in uppercase; and set "category" to null, because a transfer has none.',
-    'Set "shares" and "unit_price" as JSON numbers only when the user states how many',
-    'units they bought or the price per unit. Use null for anything they did not say.',
-    'Moving money between two of the user\'s own accounts is also a "transfer".',
-    'For "expense" and "income", leave "to_account_name", "asset_symbol", "shares" and "unit_price" null.',
-    '"installments" is how many equal monthly payments to split "amount" into.',
-    'Set it when the user mentions paying in installments (e.g. "3 taksit", "taksitli",',
-    '"in 6 installments", "split over 12 months", "pay it in 4"). Otherwise set it to 1.',
-    'A transfer is never split into installments, so always set it to 1 for a "transfer".',
-    `Today is ${toISODate(today)} (${weekday}). Resolve relative dates such as "yesterday" or "last friday" against it.`,
-    'If the user does not mention a date, use today.',
-    'Set "action" to "save" only when the user explicitly asks to save or record it,',
-    '"cancel" when they ask to cancel, discard or close, and "none" otherwise.',
-    'Keep "title" short and in the same language as the user.',
-    userText ? `User text: ${userText}` : 'The user request is in the attached audio.',
-  ].join('\n');
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    return null;
+  }
+
+  if (!parsed.category) {
+    return null;
+  }
+
+  const target = parsed.category.trim().toLocaleLowerCase();
+
+  return (
+    categories.find((item) => item.type === type && item.name.toLocaleLowerCase() === target) ??
+    null
+  );
 }
 
 // The same name can exist for both types (e.g. "Diğer"), so the type has to match too.
@@ -358,7 +405,7 @@ export function parseTransactionResponse(
     parsed.action === 'save' || parsed.action === 'cancel' ? parsed.action : 'none';
 
   if (action === 'cancel') {
-    return { action, values: null };
+    return { action, values: null, aiFilled: [] };
   }
 
   const amount = parseAIAmount(parsed.amount);
@@ -379,12 +426,14 @@ export function parseTransactionResponse(
   const currency = normalizeCurrency(parsed.currency);
   // A transfer moves money rather than spending it, so it is never split.
   const installments = type === 'transfer' ? 1 : parseInstallmentsCount(parsed.installments);
-  const date = (parsed.date ? fromISODate(parsed.date) : null) ?? fallbackDate;
+  const parsedDate = parsed.date ? fromISODate(parsed.date) : null;
+  const date = parsedDate ?? fallbackDate;
+  const title = parsed.title?.trim() || category?.name || assetSymbol || '';
 
   return {
     action,
     values: {
-      title: parsed.title?.trim() || category?.name || assetSymbol || '',
+      title,
       amount,
       type,
       date,
@@ -397,5 +446,123 @@ export function parseTransactionResponse(
       currency,
       installments,
     },
+    aiFilled: collectAiFilled({ title, currency, date: parsedDate, category, asset }),
+  };
+}
+
+/**
+ * Only the fields the model actually answered with. `amount` is always in:
+ * a response without a usable one has already thrown by this point.
+ */
+function collectAiFilled({
+  title,
+  currency,
+  date,
+  category,
+  asset,
+}: {
+  title: string;
+  currency: CurrencyCode | null;
+  date: Date | null;
+  category: Category | null;
+  asset: Asset | null;
+}): AiFilledField[] {
+  const filled: AiFilledField[] = ['amount'];
+
+  if (title) {
+    filled.push('title');
+  }
+
+  if (currency) {
+    filled.push('currency');
+  }
+
+  if (date) {
+    filled.push('date');
+  }
+
+  if (category) {
+    filled.push('category');
+  }
+
+  if (asset) {
+    filled.push('asset');
+  }
+
+  return filled;
+}
+
+/**
+ * Turns the `scan_receipt` JSON into form values. Unlike the spoken and typed
+ * flows, the model answers with ids: it is reading a photo full of numbers, and
+ * an id can be checked against the list that was sent while a near-miss name
+ * cannot. A model that echoes the name anyway still resolves, through the same
+ * matchers the other flows use.
+ */
+export function parseReceiptResponse(
+  responseText: string,
+  categories: Category[],
+  assets: Asset[],
+  fallbackDate: Date,
+): AIResult {
+  let parsed: {
+    title?: string;
+    amount?: number | string;
+    currency?: string | null;
+    date?: string;
+    category_id?: string | null;
+    account_id?: string | null;
+    type?: string;
+    installments?: number | string | null;
+  };
+
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    throw new Error(i18n.t('addTransaction.aiError'));
+  }
+
+  const amount = parseAIAmount(parsed.amount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(i18n.t('addTransaction.aiNoAmount'));
+  }
+
+  // A receipt records a purchase or a refund. It never describes moving money
+  // between the user's own accounts, so a transfer is not on the table here.
+  const type: CategoryType = parsed.type === 'income' ? 'income' : 'expense';
+  const categoryId = parsed.category_id?.trim() || null;
+  const category = categoryId
+    ? (categories.find((item) => item.id === categoryId && item.type === type) ??
+      findCategory(categories, categoryId, type))
+    : null;
+  const accountId = parsed.account_id?.trim() || null;
+  // No catch-all: an unreadable payment method leaves the user's own pick alone.
+  const asset = accountId
+    ? (assets.find((item) => item.id === accountId) ?? findAsset(assets, accountId))
+    : null;
+  const currency = normalizeCurrency(parsed.currency);
+  const parsedDate = parsed.date ? fromISODate(parsed.date) : null;
+  const date = parsedDate ?? fallbackDate;
+  const title = parsed.title?.trim() || category?.name || '';
+
+  return {
+    // A scan fills the form in and stops there — it is never an instruction to save.
+    action: 'none',
+    values: {
+      title,
+      amount,
+      type,
+      date,
+      category,
+      asset,
+      toAsset: null,
+      assetSymbol: null,
+      shares: null,
+      unitPrice: null,
+      currency,
+      installments: parseInstallmentsCount(parsed.installments),
+    },
+    aiFilled: collectAiFilled({ title, currency, date: parsedDate, category, asset }),
   };
 }

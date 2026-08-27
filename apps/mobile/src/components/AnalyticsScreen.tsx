@@ -1,4 +1,5 @@
 import {
+  calculateBudgetBreakdown,
   DEFAULT_CURRENCY,
   formatMoney,
   fromISODate,
@@ -18,6 +19,7 @@ import { formatPeriodLabel, getPeriodRange, shiftAnchor } from '../lib/analytics
 import { analyticsTimeframeOptions, type AnalyticsTimeframe } from '../lib/labels';
 import { radius, spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
+import BudgetBreakdownCard from './analytics/BudgetBreakdownCard';
 import CategoryLedgerRow, { type CategoryLedgerEntry } from './analytics/CategoryLedgerRow';
 import DatePager from './analytics/DatePager';
 import SegmentedControl from './SegmentedControl';
@@ -89,13 +91,20 @@ export default function AnalyticsScreen() {
         name: item.category ? resolveCategoryName(item.category) : uncategorizedLabel,
         icon: item.icon,
         amount: item.amount,
-        color: getCategoryColor(item.category?.name, 'expense'),
+        color: getCategoryColor(item.category?.name, 'expense', item.category?.color_code),
         share: totalSpent > 0 ? item.amount / totalSpent : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
   }, [periodTransactions]);
 
   const totalSpent = useMemo(() => ledger.reduce((sum, entry) => sum + entry.amount, 0), [ledger]);
+
+  // The 50/30/20 breakdown always looks at the selected period alone, same as
+  // the donut above it — a year view still reads the whole year's worth.
+  const budgetBreakdown = useMemo(
+    () => calculateBudgetBreakdown(periodTransactions),
+    [periodTransactions],
+  );
 
   const pieData = useMemo(
     () => ledger.map((entry) => ({ value: entry.amount, color: entry.color })),
@@ -175,7 +184,7 @@ export default function AnalyticsScreen() {
         .sort((a, b) => b.amount - a.amount)
         .map((item, segmentIndex, all) => ({
           value: item.amount,
-          color: getCategoryColor(item.category?.name, 'expense'),
+          color: getCategoryColor(item.category?.name, 'expense', item.category?.color_code),
           borderBottomLeftRadius: segmentIndex === 0 ? YEAR_BAR_RADIUS : 0,
           borderBottomRightRadius: segmentIndex === 0 ? YEAR_BAR_RADIUS : 0,
           borderTopLeftRadius: segmentIndex === all.length - 1 ? YEAR_BAR_RADIUS : 0,
@@ -268,7 +277,7 @@ export default function AnalyticsScreen() {
 
     const buckets = individual.map((item) => ({
       name: item.displayName,
-      color: getCategoryColor(item.category?.name, 'expense'),
+      color: getCategoryColor(item.category?.name, 'expense', item.category?.color_code),
       monthly: item.monthly,
     }));
 
@@ -448,6 +457,8 @@ export default function AnalyticsScreen() {
           </View>
         )}
       </View>
+
+      <BudgetBreakdownCard breakdown={budgetBreakdown} />
 
       <Text style={styles.sectionTitle}>{i18n.t('analytics.spendingBreakdown')}</Text>
     </View>

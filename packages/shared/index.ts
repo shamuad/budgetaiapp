@@ -18,5 +18,7 @@ export * from './utils/iconAsset';
 export * from './utils/accountCardColor';
 export * from './utils/categoryPalette';
 export * from './utils/categoryDisplay';
+export * from './utils/categoryGroups';
 export * from './utils/defaultCategories';
+export * from './utils/budgetBreakdown';
 export * from './utils/colorSpace';

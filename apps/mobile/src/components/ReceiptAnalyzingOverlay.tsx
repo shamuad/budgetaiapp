@@ -1,7 +1,12 @@
 import { i18n } from '@budgetaiapp/shared';
+import { Sparkles } from 'lucide-react-native';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
+  FadeInDown,
+  FadeOutDown,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -9,7 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { radius, spacing } from '../theme';
+import { spacing } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
 
 type ReceiptAnalyzingOverlayProps = {
@@ -17,103 +22,91 @@ type ReceiptAnalyzingOverlayProps = {
   title?: string;
 };
 
-/** A themed skeleton shown over the form while the AI fills it in (receipt scan or voice). */
+/**
+ * A floating status pill shown while the AI fills the form in (receipt scan or
+ * voice). Deliberately non-blocking: it sits above the form with
+ * `pointerEvents="none"`, so the user can keep typing or correcting fields
+ * while the model is still thinking, and whatever the AI answers with simply
+ * lands around them.
+ */
 export default function ReceiptAnalyzingOverlay({ title }: ReceiptAnalyzingOverlayProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const pulse = useSharedValue(0.45);
+  const pulse = useSharedValue(0);
 
   useEffect(() => {
     pulse.value = withRepeat(
-      withSequence(withTiming(1, { duration: 700 }), withTiming(0.45, { duration: 700 })),
+      withSequence(withTiming(1, { duration: 900 }), withTiming(0, { duration: 900 })),
       -1,
       true,
     );
+
+    return () => {
+      cancelAnimation(pulse);
+    };
   }, [pulse]);
 
-  const shimmer = useAnimatedStyle(() => ({
-    opacity: pulse.value,
+  // The sparkle breathes rather than spins: a slow scale and opacity swell
+  // reads as "working" without dragging the eye away from the form.
+  const sparkleStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.55, 1]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.92, 1.08]) }],
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.75, 1]),
   }));
 
   return (
-    <View style={styles.overlay} pointerEvents="auto">
-      <View style={styles.card}>
-        <Text style={styles.title}>{title ?? i18n.t('addTransaction.analyzingReceipt')}</Text>
-        <Animated.View style={[styles.block, styles.blockWide, shimmer]} />
-        <Animated.View style={[styles.block, styles.blockHero, shimmer]} />
-        <View style={styles.row}>
-          <Animated.View style={[styles.block, styles.blockHalf, shimmer]} />
-          <Animated.View style={[styles.block, styles.blockHalf, shimmer]} />
-        </View>
-        <Animated.View style={[styles.block, styles.blockLine, shimmer]} />
-        <Animated.View style={[styles.block, styles.blockLineShort, shimmer]} />
-      </View>
+    <View style={styles.wrap} pointerEvents="none">
+      <Animated.View
+        entering={FadeInDown.duration(260)}
+        exiting={FadeOutDown.duration(180)}
+        style={styles.pill}>
+        <Animated.View style={sparkleStyle}>
+          <Sparkles color={colors.tint} size={16} />
+        </Animated.View>
+        <Animated.Text style={[styles.label, labelStyle]} numberOfLines={1}>
+          {title ?? i18n.t('addTransaction.analyzingReceipt')}
+        </Animated.Text>
+      </Animated.View>
     </View>
   );
 }
 
 function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
-    overlay: {
+    wrap: {
       position: 'absolute',
-      top: 0,
       right: 0,
-      bottom: 0,
+      bottom: spacing.lg,
       left: 0,
-      justifyContent: 'center',
-      padding: spacing.xl,
-      backgroundColor: colors.overlay,
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
     },
-    card: {
-      gap: spacing.md,
-      padding: spacing.lg,
-      borderRadius: radius.lg,
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      maxWidth: '100%',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      borderRadius: 999,
       backgroundColor: colors.surfaceElevated,
       borderWidth: 1,
       borderColor: colors.borderGlass,
       shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.18,
-      shadowRadius: 24,
-      elevation: 10,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 20,
+      elevation: 8,
     },
-    title: {
-      fontSize: 17,
-      fontWeight: '700',
-      letterSpacing: -0.2,
-      textAlign: 'center',
+    label: {
+      flexShrink: 1,
+      fontSize: 14,
+      fontWeight: '600',
+      letterSpacing: -0.1,
       color: colors.text,
-      marginBottom: spacing.xs,
-    },
-    row: {
-      flexDirection: 'row',
-      gap: spacing.md,
-    },
-    block: {
-      borderRadius: radius.md,
-      backgroundColor: colors.border,
-    },
-    blockWide: {
-      height: 14,
-      width: '42%',
-      alignSelf: 'center',
-    },
-    blockHero: {
-      height: 56,
-      width: '70%',
-      alignSelf: 'center',
-    },
-    blockHalf: {
-      flex: 1,
-      height: 44,
-    },
-    blockLine: {
-      height: 16,
-      width: '100%',
-    },
-    blockLineShort: {
-      height: 16,
-      width: '64%',
     },
   });
 }

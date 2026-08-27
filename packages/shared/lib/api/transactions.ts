@@ -28,10 +28,17 @@ export type TransactionRow = Pick<
   | 'unit_price'
   | 'installment_group_id'
 > & {
-  category: Pick<Category, 'icon' | 'name' | 'is_custom' | 'translation_key'> | null;
+  category: Pick<
+    Category,
+    'icon' | 'name' | 'is_custom' | 'translation_key' | 'group_code' | 'color_code'
+  > | null;
   asset: Pick<Asset, 'icon' | 'name'> | null;
-  /** The receiving account of a transfer. Null for income and expense. */
-  to_asset: Pick<Asset, 'icon' | 'name'> | null;
+  /**
+   * The receiving account of a transfer. Null for income and expense.
+   * `type` rides along so the 50/30/20 Savings bucket can be derived from
+   * transfers landing on an `investment` account — see `calculateBudgetBreakdown`.
+   */
+  to_asset: Pick<Asset, 'icon' | 'name' | 'type'> | null;
 };
 
 /** The fields a form owns. Server-managed columns such as `created_at` stay out. */
@@ -63,7 +70,7 @@ export type TransactionInput = {
 // Both `asset_id` and `to_asset_id` point at `assets`, so each embed names its
 // own foreign key. Without the hint PostgREST cannot tell the two apart.
 const COLUMNS =
-  'id, title, amount, currency, exchange_rate, type, date, category_id, asset_id, to_asset_id, asset_symbol, shares, unit_price, installment_group_id, category:categories(icon, name, is_custom, translation_key), asset:assets!asset_id(icon, name), to_asset:assets!to_asset_id(icon, name)';
+  'id, title, amount, currency, exchange_rate, type, date, category_id, asset_id, to_asset_id, asset_symbol, shares, unit_price, installment_group_id, category:categories(icon, name, is_custom, translation_key, group_code, color_code), asset:assets!asset_id(icon, name), to_asset:assets!to_asset_id(icon, name, type)';
 
 /**
  * Every transaction, latest date first and newest entry first within a date.

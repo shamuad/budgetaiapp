@@ -59,7 +59,7 @@ function TransactionIcon({
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { transactions, totalBalance, balanceByAsset, isLoading, error, remove, removeGroup } = useTransactions({
+  const { transactions, balanceByAsset, isLoading, error, remove, removeGroup } = useTransactions({
     onDeleteError: (err) => {
       Alert.alert(i18n.t('common.errorTitle'), err.message || i18n.t('transactionActions.deleteError'));
     },
@@ -98,9 +98,13 @@ export default function DashboardScreen() {
   }, [selectedAssetId, transactions]);
 
   const focusedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? null;
+  // Headline always matches the cards: one account when focused, otherwise
+  // the sum of every account currently on the dashboard. Using net cash
+  // flow here drifted from the cards whenever a transfer (or an income
+  // booked to an account that is not listed) was in the ledger.
   const headlineBalance = focusedAsset
     ? (balanceByAsset.get(focusedAsset.id) ?? 0)
-    : totalBalance;
+    : assets.reduce((sum, asset) => sum + (balanceByAsset.get(asset.id) ?? 0), 0);
 
   function toggleAsset(assetId: string) {
     toggleSelectedAsset(assetId);

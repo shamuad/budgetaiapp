@@ -1,4 +1,5 @@
 import { i18n } from '@budgetaiapp/shared';
+import * as Device from 'expo-device';
 import * as ImagePicker from 'expo-image-picker';
 
 export type ReceiptImage = {
@@ -15,10 +16,15 @@ export async function pickReceiptImage(): Promise<ReceiptImage | null> {
     exif: false,
   };
 
-  const camera = await ImagePicker.requestCameraPermissionsAsync();
   let result: ImagePicker.ImagePickerResult;
 
   try {
+    // Simulators and emulators feed the camera a synthetic scene, so there is
+    // never a receipt to capture there.
+    const camera = Device.isDevice
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : { granted: false };
+
     if (camera.granted) {
       result = await ImagePicker.launchCameraAsync(options);
     } else {

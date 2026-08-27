@@ -1,4 +1,11 @@
-import { AssetType, CategoryType, i18n, TransactionType } from '@budgetaiapp/shared';
+import {
+  AssetType,
+  budgetGroupLabel,
+  CATEGORY_GROUPS,
+  CategoryType,
+  i18n,
+  TransactionType,
+} from '@budgetaiapp/shared';
 
 /** The account kinds a user can create from settings. */
 export const ACCOUNT_TYPES: AssetType[] = ['cash', 'card', 'bank', 'investment'];
@@ -21,6 +28,13 @@ export function categoryTypeOptions(): { id: CategoryType; label: string }[] {
     { id: 'income', label: i18n.t('addTransaction.incomes') },
   ];
 }
+
+/** Needs/Wants, offered when adding or editing an expense category. */
+export function categoryGroupOptions(): { id: CategoryGroupOption; label: string }[] {
+  return CATEGORY_GROUPS.map((group) => ({ id: group, label: budgetGroupLabel(group) }));
+}
+
+type CategoryGroupOption = (typeof CATEGORY_GROUPS)[number];
 
 export function accountTypeOptions(): { id: AssetType; label: string }[] {
   return ACCOUNT_TYPES.map((type) => ({ id: type, label: accountTypeLabel(type) }));

@@ -29,6 +29,10 @@ export type AssetType =
   | 'bank'
   | 'investment';
 
+/** The 50/30/20 tier an expense category belongs to. Always null for income —
+ * Savings is never a selectable category (see `group_code` below). */
+export type CategoryGroup = 'needs' | 'wants';
+
 export interface Category {
   id: string;
   name: string;
@@ -37,6 +41,14 @@ export interface Category {
   is_custom: boolean;
   translation_key: string | null;
   is_active: boolean;
+  // Null for every income category. Deliberately excludes 'savings': money
+  // moved to a savings/investment account is a `transfer`, never an expense
+  // category — see `calculateBudgetBreakdown`, which derives Savings from
+  // transfers instead.
+  group_code: CategoryGroup | null;
+  // Hex color driving pickers/charts. Null falls back to categoryPalette.ts's
+  // name-hash color (custom categories, income categories).
+  color_code: string | null;
   created_at: string;
 }
 

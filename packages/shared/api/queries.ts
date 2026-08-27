@@ -60,26 +60,10 @@ export function createQueryClient() {
 }
 
 /**
- * Balance is always in the user base currency, using each row's locked-in rate.
- * A transfer only shifts money between the user's own accounts, so it leaves the
- * headline figure untouched — counting it would double-report net cash flow.
- */
-function calculateBalance(rows: TransactionRow[]) {
-  return rows.reduce((total, row) => {
-    if (row.type === 'transfer') {
-      return total;
-    }
-
-    const base = toBaseAmount(row.amount, row.exchange_rate);
-
-    return row.type === 'expense' ? total - base : total + base;
-  }, 0);
-}
-
-/**
- * Net recorded movement per account. A transfer is booked as double entry: it
- * leaves the source account and lands in the destination, so both sides move
- * while the total above stays flat.
+ * Net recorded movement per account, in the user base currency.
+ * A transfer is booked as double entry: it leaves the source account and
+ * lands in the destination, so both sides move while the combined total
+ * stays flat.
  */
 function calculateBalancesByAsset(rows: TransactionRow[]) {
   const totals = new Map<string, number>();
@@ -137,15 +121,21 @@ export function useTransactionsQuery() {
     queryFn: fetchTransactions,
   });
 
-  const totalBalance = useMemo(
-    () => calculateBalance(query.data ?? []),
-    [query.data],
-  );
-
   const balanceByAsset = useMemo(
     () => calculateBalancesByAsset(query.data ?? []),
     [query.data],
   );
+
+  // Sum of every account's ledger. Transfers cancel across both sides, so
+  // this matches the dashboard cards instead of net cash flow (which skipped
+  // transfers and could equal a single income while the cards disagreed).
+  const totalBalance = useMemo(() => {
+    let total = 0;
+    for (const amount of balanceByAsset.values()) {
+      total += amount;
+    }
+    return total;
+  }, [balanceByAsset]);
 
   return {
     transactions: query.data ?? [],
@@ -190,7 +180,8 @@ export function useCategoriesQuery() {
 const ASSET_SEARCH_DEBOUNCE_MS = 500;
 const MIN_ASSET_SEARCH_LENGTH = 1;
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
+/** Delays reacting to a fast-changing value — shared by asset symbol search and AI category suggestion. */
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {
