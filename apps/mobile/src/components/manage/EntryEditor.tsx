@@ -4,6 +4,8 @@ import {
   getFaviconUrl,
   i18n,
   isRemoteIcon,
+  MAX_STATEMENT_DAY,
+  MIN_STATEMENT_DAY,
   resolveBrand,
   useAppStore,
 } from '@budgetaiapp/shared';
@@ -35,6 +37,12 @@ export type EntryDraft<T extends string> = {
   customColor?: string | null;
   /** Only meaningful when the caller passed `groupOptions` — the 50/30/20 tier for an expense category. */
   group?: string | null;
+  /** Only meaningful when the caller passed `showPaymentClue` — how a receipt names this account. */
+  paymentClue?: string | null;
+  /** Only meaningful when the caller passed `showCreditFacility` — revolving credit vs debit. */
+  isCredit?: boolean;
+  /** Inclusive cutoff 1–28. Only set when `isCredit`. */
+  statementDay?: number | null;
 };
 
 type EntryEditorProps<T extends string> = {
@@ -56,6 +64,10 @@ type EntryEditorProps<T extends string> = {
    */
   groupOptions?: { id: string; label: string }[];
   groupRequiredForType?: T;
+  /** Adds the optional receipt-matching field, which only accounts have. */
+  showPaymentClue?: boolean;
+  /** Adds debit/credit + statement day, shown only while the kind is `card`. */
+  showCreditFacility?: boolean;
   isSaving: boolean;
   onSave: (draft: EntryDraft<T>) => void;
   /** Omitted while creating, since there is nothing to remove yet. */
@@ -98,6 +110,8 @@ export default function EntryEditor<T extends string>({
   enableBrandDetect = false,
   groupOptions,
   groupRequiredForType,
+  showPaymentClue = false,
+  showCreditFacility = false,
   isSaving,
   onSave,
   onDelete,
@@ -114,7 +128,14 @@ export default function EntryEditor<T extends string>({
   // Empty string, not null, so it never accidentally matches a real option id
   // and forces an explicit tap before a new expense category can be saved.
   const [group, setGroup] = useState(initial.group ?? '');
+  const [paymentClue, setPaymentClue] = useState(initial.paymentClue ?? '');
+  const [isCredit, setIsCredit] = useState(Boolean(initial.isCredit));
+  const [statementDay, setStatementDay] = useState(
+    initial.statementDay != null ? String(initial.statementDay) : '',
+  );
   const showGroupRow = Boolean(groupOptions) && type === groupRequiredForType;
+  const showCardFacility = showCreditFacility && type === 'card';
+  const showStatementDay = showCardFacility && isCredit;
   const [detectedBrand, setDetectedBrand] = useState<BrandEntry | null>(() =>
     initialBrand(initial.name, initial.icon, enableBrandDetect),
   );
@@ -260,12 +281,30 @@ export default function EntryEditor<T extends string>({
       return;
     }
 
+    let parsedStatementDay: number | null = null;
+
+    if (showStatementDay) {
+      parsedStatementDay = Number.parseInt(statementDay, 10);
+
+      if (
+        !Number.isInteger(parsedStatementDay) ||
+        parsedStatementDay < MIN_STATEMENT_DAY ||
+        parsedStatementDay > MAX_STATEMENT_DAY
+      ) {
+        Alert.alert(i18n.t('common.errorTitle'), i18n.t('manage.missingStatementDay'));
+        return;
+      }
+    }
+
     onSave({
       name: trimmedName,
       icon: trimmedIcon,
       type,
       customColor: enableBrandDetect ? draftCustomColor : null,
       group: groupOptions ? group || null : undefined,
+      paymentClue: showPaymentClue ? paymentClue.trim() || null : undefined,
+      isCredit: showCreditFacility ? showCardFacility && isCredit : undefined,
+      statementDay: showCreditFacility ? parsedStatementDay : undefined,
     });
   };
 
@@ -382,18 +421,94 @@ export default function EntryEditor<T extends string>({
                 returnKeyType="done"
               />
             </View>
+            {showPaymentClue ? (
+              <View style={[styles.row, styles.rowStacked]}>
+                <Text style={styles.rowLabel}>{i18n.t('manage.paymentClue')}</Text>
+                <TextInput
+                  value={paymentClue}
+                  onChangeText={setPaymentClue}
+                  style={styles.rowInputStacked}
+                  placeholder={i18n.t('manage.paymentCluePlaceholder')}
+                  placeholderTextColor={colors.placeholder}
+                  // A clue is a card fragment or a brand, never a sentence.
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                />
+                <Text style={styles.rowCaption}>{i18n.t('manage.paymentClueHint')}</Text>
+              </View>
+            ) : null}
             {enableBrandDetect ? (
               <AccountColorPicker
                 value={draftCustomColor}
                 previewColor={previewCardColor}
                 onChange={setDraftCustomColor}
                 onReset={resetDraftCustomColor}
+                accountName={name}
+                faviconUri={
+                  showBrandLogo && detectedBrand ? getFaviconUrl(detectedBrand.domain) : null
+                }
               />
             ) : null}
-            <View style={[styles.row, !showGroupRow && styles.rowLast, styles.rowStacked]}>
+            <View
+              style={[
+                styles.row,
+                !showGroupRow && !showCardFacility && styles.rowLast,
+                styles.rowStacked,
+              ]}>
               <Text style={styles.rowLabel}>{i18n.t('manage.kind')}</Text>
-              <SegmentedControl options={typeOptions} value={type} onChange={setType} />
+              <SegmentedControl
+                options={typeOptions}
+                value={type}
+                onChange={(next) => {
+                  setType(next);
+                  if (next !== 'card') {
+                    setIsCredit(false);
+                    setStatementDay('');
+                  }
+                }}
+              />
             </View>
+            {showCardFacility ? (
+              <View
+                style={[
+                  styles.row,
+                  !showStatementDay && !showGroupRow && styles.rowLast,
+                  styles.rowStacked,
+                ]}>
+                <Text style={styles.rowLabel}>{i18n.t('manage.cardFacility')}</Text>
+                <SegmentedControl
+                  options={[
+                    { id: 'debit', label: i18n.t('manage.debit') },
+                    { id: 'credit', label: i18n.t('manage.credit') },
+                  ]}
+                  value={isCredit ? 'credit' : 'debit'}
+                  onChange={(next) => {
+                    const credit = next === 'credit';
+                    setIsCredit(credit);
+                    if (!credit) {
+                      setStatementDay('');
+                    }
+                  }}
+                />
+              </View>
+            ) : null}
+            {showStatementDay ? (
+              <View style={[styles.row, !showGroupRow && styles.rowLast, styles.rowStacked]}>
+                <Text style={styles.rowLabel}>{i18n.t('manage.statementDay')}</Text>
+                <TextInput
+                  value={statementDay}
+                  onChangeText={(text) => setStatementDay(text.replace(/[^\d]/g, '').slice(0, 2))}
+                  style={styles.rowInputStacked}
+                  placeholder={i18n.t('manage.statementDayPlaceholder')}
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  returnKeyType="done"
+                />
+                <Text style={styles.rowCaption}>{i18n.t('manage.statementDayHint')}</Text>
+              </View>
+            ) : null}
             {showGroupRow ? (
               <View style={[styles.row, styles.rowLast, styles.rowStacked]}>
                 <Text style={styles.rowLabel}>{i18n.t('manage.budgetGroup')}</Text>
@@ -590,6 +705,16 @@ function createStyles(colors: ColorTokens) {
       fontSize: 16,
       color: colors.text,
       textAlign: 'right',
+    },
+    // A stacked row puts its label above the field, so this one reads from the
+    // left edge instead of hugging the right the way the inline rows do.
+    rowInputStacked: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    rowCaption: {
+      fontSize: 13,
+      color: colors.textMuted,
     },
     delete: {
       alignItems: 'center',

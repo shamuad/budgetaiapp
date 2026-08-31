@@ -53,22 +53,35 @@ export default function SegmentedControl<T extends string>({
 
 function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
+    // Same surface, radius and hairline border as the form card below it, so
+    // the two read as one consistent container language rather than two
+    // differently-styled boxes stacked on top of each other.
     track: {
       flexDirection: 'row',
-      gap: 2,
-      padding: 2,
-      backgroundColor: colors.border,
-      borderRadius: radius.md,
+      gap: 4,
+      padding: spacing.xs,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
     },
     segment: {
       flex: 1,
       alignItems: 'center',
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.xs,
-      borderRadius: radius.sm,
+      borderRadius: radius.md,
     },
+    // A distinct, elevated card rather than a flat fill — the soft shadow is
+    // what makes the active segment feel like it physically sits above the
+    // track, the way the native iOS segmented control snaps into place.
     segmentActive: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceElevated,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      elevation: 3,
     },
     label: {
       fontSize: 14,

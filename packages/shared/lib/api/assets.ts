@@ -2,7 +2,7 @@ import { getSupabase } from '../supabase';
 import type { Asset, AssetType, CurrencyCode } from '../../types/database';
 
 const COLUMNS =
-  'id, name, symbol, type, icon, custom_color, sort_order, quantity, purchase_price, current_price, currency, created_at';
+  'id, name, symbol, type, icon, custom_color, payment_clue, is_credit, statement_day, sort_order, quantity, purchase_price, current_price, currency, created_at';
 
 /**
  * The fields an account form owns. An account is a top-level container, so it
@@ -16,6 +16,9 @@ export type AssetInput = {
   icon: string;
   currency: CurrencyCode;
   custom_color?: string | null;
+  payment_clue?: string | null;
+  is_credit?: boolean;
+  statement_day?: number | null;
 };
 
 // The priced columns are NOT NULL but only mean anything for investments, so

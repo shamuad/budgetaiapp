@@ -2,21 +2,19 @@ import {
   DEFAULT_CURRENCY,
   formatAssetLabel,
   formatDate,
-  formatMoney,
-  formatTransferLabel,
+  formatCurrency,
   i18n,
   TransactionRow,
   useAppStore,
   useAssets,
   useTransactions,
 } from '@budgetaiapp/shared';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Plus, Settings } from 'lucide-react-native';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,9 +23,8 @@ import {
 
 import AddTransactionModal from '../../src/components/AddTransactionModal';
 import AccountCard from '../../src/components/AccountCard';
-import OptionsModal from '../../src/components/OptionsModal';
-import TransactionItem from '../../src/components/TransactionItem';
-import { radius, spacing } from '../../src/theme';
+import TransactionItem, { transactionAccount } from '../../src/components/TransactionItem';
+import { spacing } from '../../src/theme';
 import { useAppTheme, type ColorTokens } from '../../src/theming';
 
 /** The dashboard is a summary, so the full history stays on the transactions tab. */
@@ -68,7 +65,6 @@ export default function DashboardScreen() {
   const selectedAssetId = useAppStore((state) => state.selectedAssetId);
   const toggleSelectedAsset = useAppStore((state) => state.toggleSelectedAsset);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isOptionsVisible, setIsOptionsVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<TransactionRow | null>(null);
   const heroFade = useRef(new Animated.Value(1)).current;
 
@@ -126,29 +122,18 @@ export default function DashboardScreen() {
         style={styles.screen}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.heroRow}>
-          <Animated.View style={[styles.hero, { opacity: heroFade }]}>
-            <Text style={styles.heroLabel} numberOfLines={1}>
-              {focusedAsset ? formatAssetLabel(focusedAsset) : i18n.t('dashboard.totalBalance')}
-            </Text>
-            <Text
-              style={styles.heroAmount}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.6}>
-              {formatMoney(headlineBalance, DEFAULT_CURRENCY)}
-            </Text>
-          </Animated.View>
-
-          <Pressable
-            style={styles.gear}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel={i18n.t('settings.title')}
-            onPress={() => setIsOptionsVisible(true)}>
-            <Settings color={colors.text} size={20} />
-          </Pressable>
-        </View>
+        <Animated.View style={[styles.hero, { opacity: heroFade }]}>
+          <Text style={styles.heroLabel} numberOfLines={1}>
+            {focusedAsset ? formatAssetLabel(focusedAsset) : i18n.t('dashboard.totalBalance')}
+          </Text>
+          <Text
+            style={styles.heroAmount}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}>
+            {formatCurrency(headlineBalance, DEFAULT_CURRENCY)}
+          </Text>
+        </Animated.View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{i18n.t('dashboard.myAssets')}</Text>
@@ -185,46 +170,36 @@ export default function DashboardScreen() {
           ) : recent.length === 0 ? (
             <Text style={styles.placeholder}>{i18n.t('dashboard.emptyTransactions')}</Text>
           ) : (
-            <View style={styles.list}>
+            <View>
               {recent.map((transaction, index) => {
                 const isIncome = transaction.type === 'income';
                 // A transfer neither earns nor spends, so it carries no sign.
                 const isTransfer = transaction.type === 'transfer';
                 const groupId = transaction.installment_group_id;
+                const isLast = index === recent.length - 1;
 
                 return (
-                  <View key={transaction.id}>
-                    {index > 0 ? <View style={styles.separator} /> : null}
-                    <View style={styles.listRow}>
-                      <TransactionItem
-                        flat
-                        icon={<TransactionIcon transaction={transaction} colors={colors} />}
-                        title={transaction.title}
-                        subtitle={formatDate(transaction.date, 'short')}
-                        meta={
-                          isTransfer
-                            ? formatTransferLabel(
-                                transaction.asset,
-                                transaction.to_asset,
-                                transaction.asset_symbol,
-                              )
-                            : formatAssetLabel(transaction.asset)
-                        }
-                        amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatMoney(transaction.amount, transaction.currency)}`}
-                        positive={isIncome}
-                        onEdit={() => openEditor(transaction)}
-                        onDelete={() => (groupId ? removeGroup(groupId) : remove(transaction.id))}
-                        deleteConfirmation={
-                          groupId
-                            ? {
-                                title: i18n.t('transactionActions.installmentDeleteTitle'),
-                                message: i18n.t('transactionActions.installmentDeleteMessage'),
-                                confirmLabel: i18n.t('transactionActions.deleteAll'),
-                              }
-                            : undefined
-                        }
-                      />
-                    </View>
+                  <View key={transaction.id} style={[styles.listRow, !isLast && styles.listRowBorder]}>
+                    <TransactionItem
+                      flat
+                      icon={<TransactionIcon transaction={transaction} colors={colors} />}
+                      title={transaction.title}
+                      subtitle={formatDate(transaction.date, 'short')}
+                      account={transactionAccount(transaction)}
+                      amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatCurrency(transaction.amount, transaction.currency)}`}
+                      positive={isIncome}
+                      onEdit={() => openEditor(transaction)}
+                      onDelete={() => (groupId ? removeGroup(groupId) : remove(transaction.id))}
+                      deleteConfirmation={
+                        groupId
+                          ? {
+                              title: i18n.t('transactionActions.installmentDeleteTitle'),
+                              message: i18n.t('transactionActions.installmentDeleteMessage'),
+                              confirmLabel: i18n.t('transactionActions.deleteAll'),
+                            }
+                          : undefined
+                      }
+                    />
                   </View>
                 );
               })}
@@ -233,17 +208,11 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      <Pressable style={styles.fab} onPress={() => setIsModalVisible(true)}>
-        <Plus color={colors.onBrand} size={28} />
-      </Pressable>
-
       <AddTransactionModal
         visible={isModalVisible}
         onClose={closeModal}
         transactionToEdit={editingTransaction}
       />
-
-      <OptionsModal visible={isOptionsVisible} onClose={() => setIsOptionsVisible(false)} />
     </View>
   );
 }
@@ -259,41 +228,25 @@ function createStyles(colors: ColorTokens) {
     },
     content: {
       padding: spacing.lg,
-      paddingBottom: 96,
+      paddingBottom: spacing.xl,
       gap: spacing.xl,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: spacing.md,
-    },
     hero: {
-      flex: 1,
-      paddingTop: spacing.sm,
       gap: spacing.xs,
-    },
-    gear: {
-      width: 36,
-      height: 36,
-      marginTop: spacing.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      backgroundColor: colors.surfaceElevated,
     },
     // Deliberately not uppercased: native casing turns the Turkish "Bakiye" into
     // "BAKIYE" rather than "BAKİYE".
     heroLabel: {
       fontSize: 14,
-      fontWeight: '500',
-      letterSpacing: 0.2,
+      fontWeight: '600',
+      letterSpacing: -0.2,
       color: colors.textMuted,
     },
     heroAmount: {
       fontSize: 44,
-      fontWeight: '700',
+      fontWeight: '800',
       // Tight tracking keeps a long figure from looking loose at this size.
-      letterSpacing: -1.2,
+      letterSpacing: -1.6,
       color: colors.text,
     },
     section: {
@@ -314,29 +267,12 @@ function createStyles(colors: ColorTokens) {
       paddingVertical: spacing.xs,
       gap: spacing.md,
     },
-    // Frosted, elevated surface with a soft border and shadow for the glass look.
-    // Rows inside must stay fully opaque so the swipe actions can slide under
-    // them cleanly, so the tint lives on this container, not on true alpha.
-    list: {
-      backgroundColor: colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: colors.borderGlass,
-      borderRadius: radius.lg,
-      paddingHorizontal: spacing.lg,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.08,
-      shadowRadius: 20,
-      elevation: 3,
-      // Clips the swipe actions to the grouped list's rounded corners.
-      overflow: 'hidden',
-    },
     listRow: {
       paddingVertical: spacing.md,
     },
-    separator: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
+    listRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     placeholder: {
       fontSize: 14,
@@ -345,22 +281,6 @@ function createStyles(colors: ColorTokens) {
     error: {
       fontSize: 14,
       color: colors.danger,
-    },
-    fab: {
-      position: 'absolute',
-      right: 20,
-      bottom: 20,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.brand,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 6,
     },
   });
 }

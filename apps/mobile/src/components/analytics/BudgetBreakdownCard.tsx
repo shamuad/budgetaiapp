@@ -5,7 +5,7 @@ import {
   budgetGroupLabel,
   BudgetGroup,
   DEFAULT_CURRENCY,
-  formatMoney,
+  formatCurrency,
   i18n,
 } from '@budgetaiapp/shared';
 import { useEffect, useMemo, useRef } from 'react';
@@ -103,7 +103,7 @@ function BudgetGroupRow({
       </View>
 
       <View style={styles.rowFooter}>
-        <Text style={styles.rowAmount}>{formatMoney(amount, DEFAULT_CURRENCY)}</Text>
+        <Text style={styles.rowAmount}>{formatCurrency(amount, DEFAULT_CURRENCY)}</Text>
         <Text style={styles.rowTarget}>{i18n.t('analytics.budgetTarget', { percent: targetPercent })}</Text>
       </View>
     </View>

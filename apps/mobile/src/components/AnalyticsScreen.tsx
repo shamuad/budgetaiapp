@@ -1,12 +1,12 @@
 import {
   calculateBudgetBreakdown,
   DEFAULT_CURRENCY,
-  formatMoney,
-  fromISODate,
+  formatCurrency,
   getCategoryColor,
   i18n,
   resolveCategoryName,
   toBaseAmount,
+  transactionPeriodDate,
   useTransactionsQuery,
   type TransactionRow,
 } from '@budgetaiapp/shared';
@@ -53,7 +53,7 @@ export default function AnalyticsScreen() {
     const { start, end } = periodRange;
 
     return transactions.filter((row) => {
-      const date = fromISODate(row.date);
+      const date = transactionPeriodDate(row);
       return date !== null && date >= start && date < end;
     });
   }, [transactions, periodRange]);
@@ -153,7 +153,7 @@ export default function AnalyticsScreen() {
         continue;
       }
 
-      const date = fromISODate(row.date);
+      const date = transactionPeriodDate(row);
       if (!date) {
         continue;
       }
@@ -244,7 +244,7 @@ export default function AnalyticsScreen() {
         continue;
       }
 
-      const date = fromISODate(row.date);
+      const date = transactionPeriodDate(row);
       if (!date) {
         continue;
       }
@@ -335,7 +335,7 @@ export default function AnalyticsScreen() {
             ]}
             numberOfLines={1}>
             {netCashFlow >= 0 ? '+' : ''}
-            {formatMoney(netCashFlow, DEFAULT_CURRENCY)}
+            {formatCurrency(netCashFlow, DEFAULT_CURRENCY)}
           </Text>
         </View>
       )}
@@ -445,7 +445,7 @@ export default function AnalyticsScreen() {
             centerLabelComponent={() => (
               <View style={styles.centerLabel}>
                 <Text style={styles.centerLabelAmount} numberOfLines={1}>
-                  {formatMoney(totalSpent, DEFAULT_CURRENCY)}
+                  {formatCurrency(totalSpent, DEFAULT_CURRENCY)}
                 </Text>
                 <Text style={styles.centerLabelCaption}>{i18n.t('analytics.totalSpent')}</Text>
               </View>
@@ -471,7 +471,7 @@ export default function AnalyticsScreen() {
       data={ledger}
       keyExtractor={(entry) => entry.key}
       renderItem={({ item }) => (
-        <CategoryLedgerRow entry={item} amountLabel={formatMoney(item.amount, DEFAULT_CURRENCY)} />
+        <CategoryLedgerRow entry={item} amountLabel={formatCurrency(item.amount, DEFAULT_CURRENCY)} />
       )}
       ListHeaderComponent={listHeader}
       ListEmptyComponent={

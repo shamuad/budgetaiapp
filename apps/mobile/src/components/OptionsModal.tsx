@@ -1,34 +1,89 @@
-import { i18n, useDeleteAllTransactionsMutation, useTransactionsQuery } from '@budgetaiapp/shared';
-import { ChevronRight, Folder, Trash2, Wallet } from 'lucide-react-native';
-import { ReactNode, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  i18n,
+  ThemePreference,
+  useAuthStore,
+  useDeleteAllTransactionsMutation,
+  useTransactionsQuery,
+} from '@budgetaiapp/shared';
+import { Folder, LogOut, Trash2, Wallet } from 'lucide-react-native';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { radius, spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
 import ManageAccountsModal from './manage/ManageAccountsModal';
 import ManageCategoriesModal from './manage/ManageCategoriesModal';
+import SegmentedControl from './SegmentedControl';
+
+export type SettingsAnchor = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 type OptionsModalProps = {
   visible: boolean;
   onClose: () => void;
+  anchor: SettingsAnchor | null;
 };
 
+const THEME_OPTIONS: { id: ThemePreference; label: () => string }[] = [
+  { id: 'auto', label: () => i18n.t('profile.themeAuto') },
+  { id: 'light', label: () => i18n.t('profile.themeLight') },
+  { id: 'dark', label: () => i18n.t('profile.themeDark') },
+];
+
+const POPOVER_WIDTH = 232;
+const POPOVER_GAP = 6;
+
 /**
- * Settings surface reached from the dashboard gear.
- * The management screens open on top of this sheet rather than replacing it, so
- * only one modal is ever presented at a time and closing one steps back here.
+ * Settings popover anchored under the header gear. Manage screens open on
+ * top of it; dismissing the overlay always returns to a closed gear.
  */
-export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
-  const { colors } = useAppTheme();
+export default function OptionsModal({ visible, onClose, anchor }: OptionsModalProps) {
+  const { colors, preference, setPreference } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { transactions } = useTransactionsQuery();
   const clearDataMutation = useDeleteAllTransactionsMutation();
+  const signOut = useAuthStore((state) => state.signOut);
   const [destination, setDestination] = useState<'accounts' | 'categories' | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const progress = useSharedValue(0);
 
   const count = transactions.length;
+  const menuVisible = visible && destination === null;
 
-  /** Leaves the sheet on its top level, so reopening never lands mid-drilldown. */
+  useEffect(() => {
+    progress.value = withTiming(menuVisible ? 1 : 0, {
+      duration: 160,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [menuVisible, progress]);
+
+  useEffect(() => {
+    if (!visible) {
+      setDestination(null);
+    }
+  }, [visible]);
+
   const close = () => {
     setDestination(null);
     onClose();
@@ -52,61 +107,122 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
     ]);
   };
 
+  const handleLogout = () => {
+    Alert.alert(i18n.t('profile.logoutTitle'), i18n.t('profile.logoutMessage'), [
+      { text: i18n.t('addTransaction.cancel'), style: 'cancel' },
+      {
+        text: i18n.t('profile.logout'),
+        style: 'destructive',
+        onPress: async () => {
+          setIsSigningOut(true);
+
+          try {
+            close();
+            await signOut();
+          } catch (error) {
+            setIsSigningOut(false);
+            Alert.alert(i18n.t('common.errorTitle'), (error as Error).message);
+          }
+        },
+      },
+    ]);
+  };
+
+  const { width: windowWidth } = useWindowDimensions();
+  const placement = placePopover(anchor, windowWidth);
+  const popoverStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [
+      { translateY: interpolate(progress.value, [0, 1], [-6, 0]) },
+      { scale: interpolate(progress.value, [0, 1], [0.96, 1]) },
+    ],
+  }));
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <SafeAreaProvider>
-        <Pressable style={styles.backdrop} onPress={close}>
-          {/* Swallows taps so pressing the sheet itself never dismisses it. */}
-          <Pressable onPress={() => {}}>
-            <SafeAreaView edges={['bottom']} style={styles.sheet}>
-              <View style={styles.grabber} />
-              <Text style={styles.title}>{i18n.t('settings.title')}</Text>
+    <>
+      <Modal
+        visible={menuVisible}
+        animationType="none"
+        transparent
+        statusBarTranslucent
+        presentationStyle="overFullScreen"
+        onRequestClose={close}>
+        <View style={styles.overlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel={i18n.t('addTransaction.cancel')}
+          />
 
-              <View style={styles.card}>
-                <OptionRow
-                  colors={colors}
-                  styles={styles}
-                  icon={<Wallet color={colors.tint} size={20} />}
-                  label={i18n.t('settings.manageAccounts')}
-                  onPress={() => setDestination('accounts')}
-                />
-                <OptionRow
-                  colors={colors}
-                  styles={styles}
-                  icon={<Folder color={colors.tint} size={20} />}
-                  label={i18n.t('settings.manageCategories')}
-                  onPress={() => setDestination('categories')}
-                />
-                <OptionRow
-                  colors={colors}
-                  styles={styles}
-                  icon={<Trash2 color={colors.danger} size={20} />}
-                  label={i18n.t('settings.clearData')}
-                  onPress={confirmClearData}
-                  isDestructive
-                  isDisabled={count === 0}
-                  isLast
-                />
-              </View>
+          <Animated.View style={[styles.popover, placement, popoverStyle]}>
+            <Text style={styles.themeLabel}>{i18n.t('profile.appTheme')}</Text>
+            <SegmentedControl
+              options={THEME_OPTIONS.map(({ id, label }) => ({ id, label: label() }))}
+              value={preference}
+              onChange={setPreference}
+              style={styles.themeControl}
+            />
 
-              <TouchableOpacity activeOpacity={0.7} onPress={close} style={styles.cancel}>
-                <Text style={styles.cancelText}>{i18n.t('addTransaction.cancel')}</Text>
-              </TouchableOpacity>
-            </SafeAreaView>
-          </Pressable>
-        </Pressable>
+            <OptionRow
+              styles={styles}
+              icon={<Wallet color={colors.tint} size={18} />}
+              label={i18n.t('settings.manageAccounts')}
+              onPress={() => setDestination('accounts')}
+            />
+            <OptionRow
+              styles={styles}
+              icon={<Folder color={colors.tint} size={18} />}
+              label={i18n.t('settings.manageCategories')}
+              onPress={() => setDestination('categories')}
+            />
 
-        <ManageAccountsModal
-          visible={destination === 'accounts'}
-          onClose={() => setDestination(null)}
-        />
-        <ManageCategoriesModal
-          visible={destination === 'categories'}
-          onClose={() => setDestination(null)}
-        />
-      </SafeAreaProvider>
-    </Modal>
+            <OptionRow
+              styles={styles}
+              icon={<Trash2 color={colors.danger} size={18} />}
+              label={i18n.t('settings.clearData')}
+              onPress={confirmClearData}
+              isDestructive
+              isDisabled={count === 0}
+            />
+            <OptionRow
+              styles={styles}
+              icon={
+                isSigningOut ? (
+                  <ActivityIndicator size="small" color={colors.danger} />
+                ) : (
+                  <LogOut color={colors.danger} size={18} />
+                )
+              }
+              label={i18n.t('profile.logout')}
+              onPress={handleLogout}
+              isDestructive
+              isDisabled={isSigningOut}
+              isLast
+            />
+          </Animated.View>
+        </View>
+      </Modal>
+
+      <ManageAccountsModal
+        visible={destination === 'accounts'}
+        onClose={() => setDestination(null)}
+      />
+      <ManageCategoriesModal
+        visible={destination === 'categories'}
+        onClose={() => setDestination(null)}
+      />
+    </>
   );
+}
+
+function placePopover(anchor: SettingsAnchor | null, windowWidth: number) {
+  const maxLeft = windowWidth - POPOVER_WIDTH - spacing.lg;
+  const alignedLeft = anchor ? anchor.x + anchor.width - POPOVER_WIDTH : maxLeft;
+  const left = Math.min(Math.max(spacing.lg, alignedLeft), maxLeft);
+  const top = anchor ? anchor.y + anchor.height + POPOVER_GAP : 72;
+
+  return { top, left, width: POPOVER_WIDTH };
 }
 
 type SheetStyles = ReturnType<typeof createStyles>;
@@ -115,7 +231,6 @@ type OptionRowProps = {
   icon: ReactNode;
   label: string;
   onPress: () => void;
-  colors: ColorTokens;
   styles: SheetStyles;
   isDestructive?: boolean;
   isDisabled?: boolean;
@@ -126,7 +241,6 @@ function OptionRow({
   icon,
   label,
   onPress,
-  colors,
   styles,
   isDestructive,
   isDisabled,
@@ -140,55 +254,49 @@ function OptionRow({
       style={[styles.row, isLast && styles.rowLast, isDisabled && styles.rowDisabled]}>
       {icon}
       <Text style={[styles.rowLabel, isDestructive && styles.rowLabelDestructive]}>{label}</Text>
-      {!isDestructive && <ChevronRight color={colors.chevron} size={18} />}
     </TouchableOpacity>
   );
 }
 
 function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
-    backdrop: {
+    overlay: {
       flex: 1,
-      justifyContent: 'flex-end',
-      backgroundColor: colors.overlay,
     },
-    // The sheet itself sits a shade above the canvas in dark mode (`surface`
-    // rather than `background`), so it reads as a raised layer instead of a
-    // continuation of whatever screen it was opened over.
-    sheet: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.sm,
-    },
-    grabber: {
-      alignSelf: 'center',
-      width: 36,
-      height: 5,
-      marginTop: spacing.sm,
-      borderRadius: 3,
-      backgroundColor: colors.border,
-    },
-    title: {
-      marginTop: spacing.lg,
-      marginBottom: spacing.md,
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textMuted,
-    },
-    card: {
-      backgroundColor: colors.surfaceElevated,
+    popover: {
+      position: 'absolute',
+      transformOrigin: 'top right',
+      overflow: 'hidden',
+      paddingTop: spacing.md,
       borderRadius: radius.lg,
+      backgroundColor: colors.surfaceElevated,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderGlass,
-      paddingHorizontal: spacing.lg,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.45,
+      shadowRadius: 20,
+      elevation: 16,
+    },
+    themeLabel: {
+      paddingHorizontal: spacing.md,
+      marginBottom: spacing.sm,
+      fontSize: 11,
+      fontWeight: '600',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: colors.textMuted,
+    },
+    themeControl: {
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.md,
     },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
-      minHeight: TOUCH_TARGET + 8,
+      minHeight: TOUCH_TARGET,
+      paddingHorizontal: spacing.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
@@ -200,24 +308,12 @@ function createStyles(colors: ColorTokens) {
     },
     rowLabel: {
       flex: 1,
-      fontSize: 16,
+      fontSize: 15,
+      fontWeight: '500',
       color: colors.text,
     },
     rowLabelDestructive: {
       color: colors.dangerText,
-    },
-    cancel: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: TOUCH_TARGET + 8,
-      marginTop: spacing.md,
-      backgroundColor: colors.surfaceElevated,
-      borderRadius: radius.lg,
-    },
-    cancelText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.tint,
     },
   });
 }

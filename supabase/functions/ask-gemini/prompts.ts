@@ -20,8 +20,13 @@ export type PromptCategory = {
 export type PromptAccount = {
   id: string;
   name: string;
-  /** `cash`, `card`, `bank`, `investment`, ... — the payment-clue matcher leans on this. */
+  /** `cash`, `card`, `bank`, `investment`, ... — descriptive only, never a matching key. */
   type: string | null;
+  /**
+   * What this account looks like on a receipt: "0718", "VISA", "PayPal". The
+   * only field `scan_receipt` may match against. Null when the user has not set one.
+   */
+  payment_clue: string | null;
 };
 
 /**
@@ -50,8 +55,15 @@ function identifiedCategories(categories: PromptCategory[]) {
   return categories.map((item) => `${item.id} | ${item.name} (${item.type})`).join('\n');
 }
 
+/** `id | name | type | payment_clue` per line, so a match is against the clue, not the name. */
 function identifiedAccounts(accounts: PromptAccount[]) {
-  return accounts.map((item) => `${item.id} | ${item.name} (${item.type ?? 'account'})`).join('\n');
+  return accounts
+    .map((item) => {
+      const clue = item.payment_clue?.trim() || 'null';
+
+      return `${item.id} | ${item.name} | ${item.type ?? 'account'} | payment_clue: ${clue}`;
+    })
+    .join('\n');
 }
 
 /**
@@ -170,18 +182,18 @@ export function buildReceiptPrompt(
     'Judge by the line items when they are readable, otherwise by the type of merchant.',
     identifiedCategories(categories),
     '',
-    '"account_id": which of the user\'s own accounts paid, copied EXACTLY from this list:',
+    '"account_id": which of the user\'s own accounts paid, copied EXACTLY from this list.',
+    'Never invent an id, and never answer with the name.',
     identifiedAccounts(accounts),
-    'Look for the payment clues printed near the total: a card brand and its last four digits',
-    '("VISA 1234", "MASTERCARD ****5678", "MAESTRO", "AMEX"), the words PIN, CONTACTLESS,',
-    'DEBIT, CREDIT, KREDI KARTI, BANKA KARTI, CASH, NAKIT, CONTANT, a bank or issuer name,',
-    'or a fragment of an IBAN or account number.',
-    'Match those clues against the accounts above: prefer an account whose name contains the',
-    'bank or issuer, or whose name ends in the same last four digits. Use the kind in brackets',
-    'as a tiebreak — a cash clue points at a "cash" account, a card clue at a "card" account,',
-    'a bank transfer at a "bank" account.',
-    'Return null when the receipt gives no usable clue or when two accounts match equally well.',
-    'Guessing the wrong account is worse than returning null.',
+    'Look for the payment method printed near the total: a card brand, a masked PAN',
+    '("VISA 1234", "489495xxxxxx0718", "MASTERCARD ****5678"), the words CASH, NAKIT,',
+    'CONTANT, PIN, CONTACTLESS, or a wallet name such as PayPal.',
+    'To find the best matching account_id, strictly compare the payment method found on the',
+    'receipt (like "VISA", "489495xxxxxx0718", "Cash") against the "payment_clue" field of',
+    'the provided accounts. If a match is found using the payment_clue, return that account_id.',
+    'If no clear match is found, return null.',
+    'Do not match against the account name or type. An account whose payment_clue is null',
+    'can never be selected. Guessing the wrong account is worse than returning null.',
     '',
     '"type": "expense" for a normal purchase. Use "income" only when the document is a refund,',
     'a return or a credit note (IADE, RETOUR, REFUND) that gives money back to the user.',

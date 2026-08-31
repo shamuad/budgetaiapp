@@ -60,6 +60,9 @@ export default function ManageAccountsModal({
         icon: asset.icon,
         type,
         customColor: asset.custom_color,
+        paymentClue: asset.payment_clue,
+        isCredit: asset.is_credit,
+        statementDay: asset.statement_day,
         subtitle: `${accountTypeLabel(type)} · ${i18n.t('manage.usage', {
           count: usage.get(asset.id) ?? 0,
         })}`,
@@ -87,6 +90,10 @@ export default function ManageAccountsModal({
       icon: draft.icon,
       currency: existing?.currency ?? DEFAULT_CURRENCY,
       custom_color: draft.customColor ?? null,
+      payment_clue: draft.paymentClue ?? null,
+      is_credit: draft.type === 'card' && Boolean(draft.isCredit),
+      statement_day:
+        draft.type === 'card' && draft.isCredit ? (draft.statementDay ?? null) : null,
     };
   };
 
@@ -98,6 +105,8 @@ export default function ManageAccountsModal({
       typeOptions={accountTypeOptions()}
       iconChoices={ACCOUNT_ICONS}
       enableBrandDetect
+      showPaymentClue
+      showCreditFacility
       reorderable
       addLabel={i18n.t('manage.addAccount')}
       createTitle={i18n.t('manage.newAccount')}

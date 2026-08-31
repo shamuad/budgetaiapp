@@ -1,9 +1,20 @@
 export default {
+  tabs: {
+    home: 'Home',
+  },
+  header: {
+    greetingMorning: 'Goedemorgen, %{name}',
+    greetingAfternoon: 'Goedemiddag, %{name}',
+    greetingEvening: 'Goedenavond, %{name}',
+  },
   profile: {
     accountSection: 'Account',
     logout: 'Uitloggen',
     logoutTitle: 'Uitloggen?',
     logoutMessage: 'Je moet opnieuw inloggen om bij je gegevens te komen.',
+    changeAvatar: 'Profielfoto wijzigen',
+    avatarPermissionDenied: 'Toegang tot de fotobibliotheek is geweigerd. Schakel dit in bij Instellingen om je foto te wijzigen.',
+    avatarUploadError: 'Je profielfoto kon niet worden bijgewerkt.',
   },
   auth: {
     loginTitle: 'Welkom terug',
@@ -55,6 +66,24 @@ export default {
     aiVoiceProcessing: 'AI analyseert uw stem...',
     aiFilledField: 'Door AI ingevuld',
     aiFilledAccount: 'AI heeft deze rekening op de bon herkend',
+  },
+  manage: {
+    paymentClue: 'Betaalkenmerk (optioneel)',
+    paymentCluePlaceholder: 'bijv. 0718, VISA of PayPal',
+    paymentClueHint: 'Helpt AI om bonnen automatisch aan deze rekening te koppelen.',
+    cardPreview: 'Kaartvoorbeeld',
+    premiumGradients: 'Premium gradiënten',
+    gradientMetallicGrey: 'Metallic grijs',
+    gradientGold: 'Goud',
+    gradientObsidian: 'Obsidiaanzwart',
+    gradientTitanium: 'Titanium',
+    cardFacility: 'Soort pas',
+    debit: 'Debet',
+    credit: 'Credit',
+    statementDay: 'Afsluitdag',
+    statementDayPlaceholder: 'bijv. 15',
+    statementDayHint: 'Aankopen na deze dag vallen op het afschrift van de volgende maand.',
+    missingStatementDay: 'Voer een afsluitdag tussen 1 en 28 in.',
   },
   categories: {
     category_salary: 'Salaris',

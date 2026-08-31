@@ -1,5 +1,49 @@
-import i18n from '../i18n';
+import i18n, { deviceNumberSeparators, numberLocale } from '../i18n';
 import type { CurrencyCode } from '../types/database';
+import {
+  amountCursorAfterMask as amountCursorAfterMaskAt,
+  amountInputPlaceholder as amountInputPlaceholderAt,
+  formatAmountForInput as formatAmountForInputAt,
+  formatCurrency as formatCurrencyAt,
+  localeNumberParts as localeNumberPartsAt,
+  maskAmountInput as maskAmountInputAt,
+} from './money';
+
+export {
+  formatGroupedInteger,
+  NUMBER_LOCALES,
+  resolveNumberLocale,
+} from './money';
+export type { NumberLanguage, NumberSeparators } from './money';
+
+function activeNumberLocale() {
+  return numberLocale;
+}
+
+function activeNumberParts() {
+  return localeNumberPartsAt(activeNumberLocale(), deviceNumberSeparators);
+}
+
+export function localeNumberParts() {
+  return activeNumberParts();
+}
+
+export function amountInputPlaceholder() {
+  return amountInputPlaceholderAt(activeNumberLocale(), activeNumberParts());
+}
+
+export function maskAmountInput(raw: string, maxFractionDigits = 2) {
+  return maskAmountInputAt(raw, activeNumberLocale(), maxFractionDigits, activeNumberParts());
+}
+
+export function amountCursorAfterMask(
+  previous: string,
+  raw: string,
+  masked: string,
+  hintedCursor: number,
+) {
+  return amountCursorAfterMaskAt(previous, raw, masked, hintedCursor);
+}
 
 // Local calendar day, so a late-night entry is not pushed to tomorrow by UTC.
 export function toISODate(date: Date) {
@@ -28,6 +72,15 @@ export function fromISODate(value: string) {
   return parsed;
 }
 
+/**
+ * Date used for period membership (analytics, "This Month"). Credit income
+ * and expense snapshot a billing month at write time; everything else uses
+ * the purchase day.
+ */
+export function transactionPeriodDate(row: { billing_month: string | null; date: string }) {
+  return fromISODate(row.billing_month ?? row.date);
+}
+
 type DateInput = Date | string;
 
 export function formatDate(value: DateInput, style: 'long' | 'short' = 'long') {
@@ -44,11 +97,13 @@ export function formatDate(value: DateInput, style: 'long' | 'short' = 'long') {
   });
 }
 
+/** Currency string for every screen — dashboard, assets, transactions, forms. */
+export function formatCurrency(amount: number, currency: CurrencyCode) {
+  return formatCurrencyAt(amount, currency, activeNumberLocale(), activeNumberParts());
+}
+
 export function formatMoney(amount: number, currency: CurrencyCode) {
-  return new Intl.NumberFormat(i18n.locale, {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrency(amount, currency);
 }
 
 /** Converts an original amount into the user base currency using the locked-in rate. */
@@ -113,12 +168,9 @@ export function parseAIAmount(value: unknown): number {
   return NaN;
 }
 
-/** Writes an AI-parsed amount into the input using a comma decimal, without thousand separators. */
+/** Writes a stored amount into the input, grouped and using the active locale decimal. */
 export function formatAmountForInput(amount: number): string {
-  const [whole, fraction = ''] = amount.toFixed(2).split('.');
-  const trimmedFraction = fraction.replace(/0+$/, '');
-
-  return trimmedFraction ? `${whole},${trimmedFraction}` : whole;
+  return formatAmountForInputAt(amount, activeNumberLocale(), activeNumberParts());
 }
 
 /** Icon and name of an account, e.g. "💳 Credit Card". Undefined when no account is linked. */

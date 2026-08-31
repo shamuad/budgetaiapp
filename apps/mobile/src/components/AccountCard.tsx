@@ -1,10 +1,10 @@
 import {
   Asset,
   DEFAULT_CURRENCY,
-  formatMoney,
-  getAccountCardColor,
+  formatCurrency,
   getFaviconUrl,
   isRemoteIcon,
+  resolveAccountCardAppearance,
   resolveBrand,
 } from '@budgetaiapp/shared';
 import { Wallet } from 'lucide-react-native';
@@ -20,6 +20,7 @@ import {
 
 import { spacing } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
+import CardSurface from './CardSurface';
 
 type AccountCardProps = {
   asset: Asset;
@@ -39,7 +40,7 @@ export default function AccountCard({
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const brand = resolveBrand(asset.name);
-  const backgroundColor = getAccountCardColor(asset);
+  const appearance = resolveAccountCardAppearance(asset);
   const faviconUri = isRemoteIcon(asset.icon)
     ? asset.icon!
     : brand
@@ -79,37 +80,43 @@ export default function AccountCard({
     <Pressable onPress={onPress} accessibilityRole="button">
       <Animated.View
         style={[
-          styles.card,
-          { backgroundColor, opacity, transform: [{ scale }] },
-          isFocused && styles.cardFocused,
+          styles.cardWrap,
+          { opacity, transform: [{ scale }] },
+          isFocused && styles.cardWrapFocused,
         ]}>
-        <View style={styles.sheen} />
-        <View style={styles.chip} />
+        <CardSurface appearance={appearance} style={[styles.card, isFocused && styles.cardFocused]}>
+          <View style={styles.sheen} />
+          <View style={styles.chip} />
 
-        <View style={styles.topRow}>
-          <Text style={styles.institution} numberOfLines={1}>
-            {brand?.name ?? asset.name}
-          </Text>
+          <View style={styles.topRow}>
+            <Text style={styles.institution} numberOfLines={1}>
+              {brand?.name ?? asset.name}
+            </Text>
 
-          <View style={styles.brandMark}>
-            {showFavicon ? (
-              <Image
-                source={{ uri: faviconUri! }}
-                style={styles.favicon}
-                onError={() => setFaviconFailed(true)}
-              />
-            ) : (
-              <Wallet color={colors.onBrand} size={18} strokeWidth={2} />
-            )}
+            <View style={styles.brandMark}>
+              {showFavicon ? (
+                <Image
+                  source={{ uri: faviconUri! }}
+                  style={styles.favicon}
+                  onError={() => setFaviconFailed(true)}
+                />
+              ) : (
+                <Wallet color={colors.onBrand} size={18} strokeWidth={2} />
+              )}
+            </View>
           </View>
-        </View>
 
-        <View style={styles.bottomRow}>
-          <Text style={styles.label}>Balance</Text>
-          <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-            {formatMoney(balance, DEFAULT_CURRENCY)}
-          </Text>
-        </View>
+          <View style={styles.bottomRow}>
+            <Text style={styles.label}>Balance</Text>
+            <Text
+              style={styles.balance}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}>
+              {formatCurrency(balance, DEFAULT_CURRENCY)}
+            </Text>
+          </View>
+        </CardSurface>
       </Animated.View>
     </Pressable>
   );
@@ -117,28 +124,31 @@ export default function AccountCard({
 
 function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
-    card: {
+    cardWrap: {
       width: 200,
       height: 126,
       borderRadius: 18,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 16 },
+      shadowOpacity: 0.34,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    cardWrapFocused: {
+      shadowOpacity: 0.44,
+      shadowRadius: 28,
+      elevation: 16,
+    },
+    card: {
+      flex: 1,
+      borderRadius: 18,
       padding: spacing.lg,
       justifyContent: 'space-between',
-      overflow: 'hidden',
-      borderWidth: 1.5,
-      // Deliberately literal: a translucent white chrome that reads correctly
-      // over any brand/custom card color, in either app theme.
-      borderColor: 'rgba(255, 255, 255, 0.12)',
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.22,
-      shadowRadius: 18,
-      elevation: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.10)',
     },
     cardFocused: {
       borderColor: 'rgba(255, 255, 255, 0.55)',
-      shadowOpacity: 0.32,
-      shadowRadius: 22,
-      elevation: 12,
     },
     sheen: {
       position: 'absolute',

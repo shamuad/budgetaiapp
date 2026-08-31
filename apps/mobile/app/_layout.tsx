@@ -1,7 +1,7 @@
 import 'react-native-reanimated';
 import '../src/lib/apiConfig';
 
-import { useAuthStore } from '@budgetaiapp/shared';
+import { i18n, useAuthStore } from '@budgetaiapp/shared';
 import { Stack } from 'expo-router';
 import {
   DarkTheme as RouterDarkTheme,
@@ -76,6 +76,14 @@ function RootStack() {
                 after the app is already showing one side (e.g. on log out). */}
             <Stack.Protected guard={showTabs}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="profile"
+                options={{
+                  title: i18n.t('tabs.profile'),
+                  headerBackButtonDisplayMode: 'minimal',
+                  headerShadowVisible: false,
+                }}
+              />
             </Stack.Protected>
             <Stack.Protected guard={!showTabs}>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />

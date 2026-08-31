@@ -14,9 +14,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { spacing, TOUCH_TARGET } from '../theme';
+import { radius, spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorScheme, type ColorTokens } from '../theming';
 
 type DockMode = 'hub' | 'text';
@@ -40,28 +39,20 @@ type SmartDockProps = {
   onScan: () => void;
 };
 
-// Each action keeps a single, subtle tint on its icon only — the button
-// itself stays a neutral glass chip, so the row reads as one calm, minimal
-// instrument cluster rather than three loud, competing pills.
-const DOCK_ICON_TINT: Record<ColorScheme, Record<'text' | 'voice' | 'scan', string>> = {
-  light: {
-    text: '#6366F1',
-    voice: '#E11D48',
-    scan: '#059669',
-  },
-  dark: {
-    text: '#A78BFA',
-    voice: '#FB7185',
-    scan: '#5EEAD4',
-  },
-};
+// Vivid, standard Apple system colors — kept identical across light/dark so
+// each action reads as a bold, unmistakable button rather than a muted icon,
+// the same way Contacts colors its Call/Message/Mail actions.
+const DOCK_ACTION_COLOR = {
+  text: '#6D5CE0',
+  voice: '#FF3B30',
+  scan: '#30B255',
+} as const;
 
 /**
- * Unified AI Hub: a floating glass dock with three icon-only actions (Smart
- * Text, Voice, Scan Receipt) that all delegate to the existing AI/voice
- * functions passed in as props. This component owns no AI state of its own
- * beyond which of its two local UI modes ("hub" icons vs. the text composer)
- * is showing.
+ * Unified AI Hub: three big, colorful action buttons (Smart Text, Voice, Scan
+ * Receipt) that all delegate to the existing AI/voice functions passed in as
+ * props. This component owns no AI state of its own beyond which of its two
+ * local UI modes ("hub" buttons vs. the text composer) is showing.
  */
 export default function SmartDock({
   visible,
@@ -76,9 +67,7 @@ export default function SmartDock({
   onScan,
 }: SmartDockProps) {
   const { colors, scheme } = useAppTheme();
-  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, scheme), [colors, scheme]);
-  const tints = DOCK_ICON_TINT[scheme];
   const [mode, setMode] = useState<DockMode>('hub');
   const inputRef = useRef<TextInput>(null);
 
@@ -123,21 +112,19 @@ export default function SmartDock({
     setMode('hub');
   }
 
-  const bottomPad = Math.max(insets.bottom, spacing.sm);
-
   return (
-    <View style={[styles.wrap, { paddingBottom: bottomPad }]}>
-      <View style={styles.dock}>
-        {mode === 'text' ? (
-          <View style={styles.composer}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.iconButton}
-              onPress={() => setMode('hub')}
-              accessibilityRole="button"
-              accessibilityLabel={i18n.t('addTransaction.cancel')}>
-              <X color={colors.textMuted} size={18} />
-            </TouchableOpacity>
+    <View style={styles.wrap}>
+      {mode === 'text' ? (
+        <View style={styles.composer}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.iconButton}
+            onPress={() => setMode('hub')}
+            accessibilityRole="button"
+            accessibilityLabel={i18n.t('addTransaction.cancel')}>
+            <X color={colors.textMuted} size={18} />
+          </TouchableOpacity>
+          <View style={styles.composerField}>
             <TextInput
               ref={inputRef}
               style={styles.input}
@@ -152,73 +139,80 @@ export default function SmartDock({
               editable={!isBusy}
               multiline
             />
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[styles.send, !canSend && styles.sendDisabled]}
-              onPress={() => void submitText()}
-              disabled={!canSend}
-              accessibilityRole="button"
-              accessibilityLabel={i18n.t('addTransaction.aiParse')}>
-              <Send color={colors.onBrand} size={16} />
-            </TouchableOpacity>
           </View>
-        ) : isVoiceProcessing ? (
-          <Animated.View
-            entering={FadeIn.duration(220)}
-            exiting={FadeOut.duration(120)}
-            style={styles.processing}>
-            <ProcessingState styles={styles} colors={colors} />
-          </Animated.View>
-        ) : (
-          <Animated.View entering={FadeIn.duration(220)} style={styles.iconRow}>
-            <DockIconButton
-              label={i18n.t('addTransaction.smartText')}
-              onPress={() => setMode('text')}
-              disabled={isBusy}
-              styles={styles}>
-              <Sparkles color={tints.text} size={20} strokeWidth={2} />
-            </DockIconButton>
-            <DockIconButton
-              label={i18n.t('addTransaction.voice')}
-              disabled={isBusy}
-              styles={styles}
-              onPressIn={handleVoicePressIn}
-              onPressOut={handleVoicePressOut}>
-              <Mic color={tints.voice} size={20} strokeWidth={2} />
-            </DockIconButton>
-            <DockIconButton
-              label={i18n.t('addTransaction.scanReceipt')}
-              onPress={onScan}
-              disabled={isBusy || isRecording}
-              styles={styles}>
-              <ScanLine color={tints.scan} size={20} strokeWidth={2} />
-            </DockIconButton>
-          </Animated.View>
-        )}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.send, !canSend && styles.sendDisabled]}
+            onPress={() => void submitText()}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel={i18n.t('addTransaction.aiParse')}>
+            <Send color={colors.onBrand} size={16} />
+          </TouchableOpacity>
+        </View>
+      ) : isVoiceProcessing ? (
+        <Animated.View
+          entering={FadeIn.duration(220)}
+          exiting={FadeOut.duration(120)}
+          style={styles.processing}>
+          <ProcessingState styles={styles} colors={colors} />
+        </Animated.View>
+      ) : (
+        <Animated.View entering={FadeIn.duration(220)} style={styles.iconRow}>
+          <DockIconButton
+            label={i18n.t('addTransaction.smartText')}
+            color={DOCK_ACTION_COLOR.text}
+            onPress={() => setMode('text')}
+            disabled={isBusy}
+            styles={styles}
+            colors={colors}>
+            <Sparkles color={colors.onBrand} size={26} strokeWidth={2} />
+          </DockIconButton>
+          <DockIconButton
+            label={i18n.t('addTransaction.voice')}
+            color={DOCK_ACTION_COLOR.voice}
+            disabled={isBusy}
+            styles={styles}
+            colors={colors}
+            onPressIn={handleVoicePressIn}
+            onPressOut={handleVoicePressOut}>
+            <Mic color={colors.onBrand} size={26} strokeWidth={2} />
+          </DockIconButton>
+          <DockIconButton
+            label={i18n.t('addTransaction.scanReceipt')}
+            color={DOCK_ACTION_COLOR.scan}
+            onPress={onScan}
+            disabled={isBusy || isRecording}
+            styles={styles}
+            colors={colors}>
+            <ScanLine color={colors.onBrand} size={26} strokeWidth={2} />
+          </DockIconButton>
+        </Animated.View>
+      )}
 
-        {/* A non-interactive overlay, never the pill itself, carries the
-            listening indicator — so the voice touch target underneath never
-            changes shape or handlers while the finger is still down. */}
-        {isRecording ? (
-          <View style={styles.listeningOverlay} pointerEvents="none">
-            <ListeningState styles={styles} colors={colors} />
-          </View>
-        ) : null}
-      </View>
+      {/* A non-interactive overlay, never the buttons themselves, carries the
+          listening indicator — so the voice touch target underneath never
+          changes shape or handlers while the finger is still down. */}
+      {isRecording ? (
+        <View style={styles.listeningOverlay} pointerEvents="none">
+          <ListeningState styles={styles} colors={colors} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 /**
- * One minimalist, icon-only action: a neutral glass chip (no heavy fill, no
- * label) that carries only a subtly tinted icon and an `accessibilityLabel`
- * for the text the pill used to show. `activeOpacity={1}` plus the pressed
- * dim below keep the voice button's touch target visually and functionally
- * unchanged mid-gesture — hold-to-talk depends on it never swapping shape.
+ * One bold, colorful action: a big solid-color circle carrying a white icon,
+ * with its label printed underneath — the same pattern as the Contacts app's
+ * Call/Message/Mail buttons. The circle's shape and handlers never change
+ * mid-press, so hold-to-talk keeps working the same way it always has.
  */
 function DockIconButton({
   label,
+  color,
   styles,
+  colors,
   disabled,
   onPress,
   onPressIn,
@@ -226,7 +220,9 @@ function DockIconButton({
   children,
 }: {
   label: string;
+  color: string;
   styles: ReturnType<typeof createStyles>;
+  colors: ColorTokens;
   disabled?: boolean;
   onPress?: () => void;
   onPressIn?: () => void;
@@ -234,19 +230,26 @@ function DockIconButton({
   children: ReactNode;
 }) {
   return (
-    <TouchableOpacity
-      activeOpacity={0.6}
-      style={[styles.iconChip, disabled && styles.iconChipDisabled]}
-      onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
-      disabled={disabled}
-      delayPressIn={0}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      accessibilityRole="button"
-      accessibilityLabel={label}>
-      {children}
-    </TouchableOpacity>
+    <View style={styles.actionButton}>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        style={[styles.iconChip, { backgroundColor: color }, disabled && styles.iconChipDisabled]}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        disabled={disabled}
+        delayPressIn={0}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        accessibilityRole="button"
+        accessibilityLabel={label}>
+        {children}
+      </TouchableOpacity>
+      <Text
+        style={[styles.actionLabel, disabled && { color: colors.placeholder }]}
+        numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -381,54 +384,52 @@ const waveStyles = StyleSheet.create({
 
 function createStyles(colors: ColorTokens, scheme: ColorScheme) {
   return StyleSheet.create({
-    // No top border, no page-matching fill on the dock itself below — the
-    // card's own shadow and radius are what separate it from the form above,
-    // so it reads as floating rather than as an attached bottom bar.
+    // Same surface, radius and hairline as the type control and form card,
+    // so the AI tools read as another form block rather than floating chips.
     wrap: {
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
-      backgroundColor: colors.background,
-    },
-    // A rounder, capsule-like radius than the rest of the app's cards — this
-    // is the one surface meant to feel like a floating action bar rather
-    // than a docked panel.
-    dock: {
-      minHeight: TOUCH_TARGET + 8,
+      minHeight: 88,
+      justifyContent: 'center',
+      paddingVertical: spacing.md,
       paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.sm,
-      borderRadius: 26,
-      backgroundColor: scheme === 'dark' ? colors.surfaceElevated : colors.surface,
-      borderWidth: 1,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderGlass,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: scheme === 'dark' ? 0.32 : 0.12,
-      shadowRadius: 20,
-      elevation: 8,
       overflow: 'hidden',
     },
     iconRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: spacing.xl,
-      minHeight: TOUCH_TARGET,
+      alignItems: 'flex-start',
+      justifyContent: 'space-evenly',
     },
-    // Neutral, translucent glass chip — the same `surfaceGlass`/`borderGlass`
-    // tokens the composer's cancel button already uses — so only the icon
-    // itself carries any color.
+    actionButton: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      width: 84,
+    },
+    // Big, bold and solid — each action is its own saturated color circle,
+    // matching the native iOS "quick action" button convention.
     iconChip: {
-      width: TOUCH_TARGET,
-      height: TOUCH_TARGET,
-      borderRadius: TOUCH_TARGET / 2,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surfaceGlass,
-      borderWidth: 1,
-      borderColor: colors.borderGlass,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.24,
+      shadowRadius: 8,
+      elevation: 4,
     },
     iconChipDisabled: {
       opacity: 0.4,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    actionLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textMuted,
     },
     composer: {
       flexDirection: 'row',
@@ -442,10 +443,17 @@ function createStyles(colors: ColorTokens, scheme: ColorScheme) {
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 18,
-      backgroundColor: colors.surfaceGlass,
+      backgroundColor: scheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : colors.surfaceGlass,
+    },
+    composerField: {
+      flex: 1,
+      maxHeight: 96,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: scheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : colors.surfaceGlass,
     },
     input: {
-      flex: 1,
       maxHeight: 96,
       paddingVertical: spacing.sm,
       fontSize: 16,
@@ -472,7 +480,7 @@ function createStyles(colors: ColorTokens, scheme: ColorScheme) {
       left: 0,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: scheme === 'dark' ? colors.surfaceElevated : colors.surface,
+      backgroundColor: colors.surface,
     },
     listening: {
       flexDirection: 'row',

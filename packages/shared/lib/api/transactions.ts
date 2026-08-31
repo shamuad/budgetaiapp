@@ -20,6 +20,7 @@ export type TransactionRow = Pick<
   | 'exchange_rate'
   | 'type'
   | 'date'
+  | 'billing_month'
   | 'category_id'
   | 'asset_id'
   | 'to_asset_id'
@@ -51,6 +52,9 @@ export type TransactionInput = {
   type: TransactionType;
   // Calendar day as YYYY-MM-DD.
   date: string;
+  // First of the statement month (`YYYY-MM-01`) for credit income/expense.
+  // Null for cash/debit and for transfers.
+  billing_month: string | null;
   // Null on a transfer: money moved rather than being spent on something.
   category_id: string | null;
   // Required: every transaction is booked against an account.
@@ -70,7 +74,7 @@ export type TransactionInput = {
 // Both `asset_id` and `to_asset_id` point at `assets`, so each embed names its
 // own foreign key. Without the hint PostgREST cannot tell the two apart.
 const COLUMNS =
-  'id, title, amount, currency, exchange_rate, type, date, category_id, asset_id, to_asset_id, asset_symbol, shares, unit_price, installment_group_id, category:categories(icon, name, is_custom, translation_key, group_code, color_code), asset:assets!asset_id(icon, name), to_asset:assets!to_asset_id(icon, name, type)';
+  'id, title, amount, currency, exchange_rate, type, date, billing_month, category_id, asset_id, to_asset_id, asset_symbol, shares, unit_price, installment_group_id, category:categories(icon, name, is_custom, translation_key, group_code, color_code), asset:assets!asset_id(icon, name), to_asset:assets!to_asset_id(icon, name, type)';
 
 /**
  * Every transaction, latest date first and newest entry first within a date.

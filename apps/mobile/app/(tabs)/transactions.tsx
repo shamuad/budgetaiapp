@@ -1,12 +1,10 @@
 import {
   Category,
-  formatAssetLabel,
   formatDate,
-  formatMoney,
-  formatTransferLabel,
-  fromISODate,
+  formatCurrency,
   i18n,
   TransactionRow,
+  transactionPeriodDate,
   useCategories,
   useTransactions,
 } from '@budgetaiapp/shared';
@@ -18,7 +16,7 @@ import AddTransactionModal from '../../src/components/AddTransactionModal';
 import TransactionFilterSheet, {
   type TransactionFilterDraft,
 } from '../../src/components/TransactionFilterSheet';
-import TransactionItem from '../../src/components/TransactionItem';
+import TransactionItem, { transactionAccount } from '../../src/components/TransactionItem';
 import { radius, spacing, TOUCH_TARGET } from '../../src/theme';
 import { useAppTheme, type ColorTokens } from '../../src/theming';
 
@@ -65,7 +63,7 @@ export default function TransactionsScreen() {
       }
 
       if (filters.dateFrom || filters.dateTo) {
-        const date = fromISODate(row.date);
+        const date = transactionPeriodDate(row);
         if (!date) {
           return false;
         }
@@ -100,12 +98,8 @@ export default function TransactionsScreen() {
         }
         title={item.title}
         subtitle={formatDate(item.date, 'short')}
-        meta={
-          isTransfer
-            ? formatTransferLabel(item.asset, item.to_asset, item.asset_symbol)
-            : formatAssetLabel(item.asset)
-        }
-        amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatMoney(item.amount, item.currency)}`}
+        account={transactionAccount(item)}
+        amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatCurrency(item.amount, item.currency)}`}
         positive={isIncome}
         onEdit={() => setEditingTransaction(item)}
         onDelete={() => (groupId ? removeGroup(groupId) : remove(item.id))}

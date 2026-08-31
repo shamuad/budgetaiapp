@@ -80,6 +80,12 @@ export interface Transaction {
   unit_price: number | null;
   // Calendar day as YYYY-MM-DD, without a time or timezone.
   date: string;
+  /**
+   * First day of the statement month this row belongs to (`YYYY-MM-01`).
+   * Set at write time for income/expense on an `is_credit` account. Null for
+   * cash/debit/bank and for transfers (paying a card is not statement spending).
+   */
+  billing_month: string | null;
   notes: string | null;
   // Shared by every row an installment plan split into, so they can be edited
   // or deleted together. Null for a normal, one-off transaction.
@@ -95,6 +101,21 @@ export interface Asset {
   icon: string | null;
   /** User override for wallet card background. Null uses auto-detected bank color. */
   custom_color: string | null;
+  /**
+   * What this account looks like on a receipt — "0718", "VISA", "PayPal". Kept
+   * apart from `name` so the display name never has to carry matching noise.
+   */
+  payment_clue: string | null;
+  /**
+   * Credit facility. Only meaningful when `type` is `card`. Debit cards stay
+   * false — `card` is the vessel, not a synonym for revolving credit.
+   */
+  is_credit: boolean;
+  /**
+   * Inclusive cutoff day of the month (1–28). Purchases on or before this day
+   * belong to this month's statement. Null unless `is_credit`.
+   */
+  statement_day: number | null;
   /** Manual list order in manage accounts and dashboard cards. */
   sort_order: number | null;
   // Priced columns describe investment holdings and stay at zero for accounts.
@@ -103,4 +124,10 @@ export interface Asset {
   current_price: number | null;
   currency: CurrencyCode;
   created_at: string;
+}
+
+export interface Profile {
+  id: string;
+  avatar_url: string | null;
+  updated_at: string;
 }

@@ -1,9 +1,20 @@
 export default {
+  tabs: {
+    home: 'Inicio',
+  },
+  header: {
+    greetingMorning: 'Buenos días, %{name}',
+    greetingAfternoon: 'Buenas tardes, %{name}',
+    greetingEvening: 'Buenas noches, %{name}',
+  },
   profile: {
     accountSection: 'Cuenta',
     logout: 'Cerrar sesión',
     logoutTitle: '¿Cerrar sesión?',
     logoutMessage: 'Tendrás que iniciar sesión de nuevo para acceder a tus datos.',
+    changeAvatar: 'Cambiar foto de perfil',
+    avatarPermissionDenied: 'Se denegó el acceso a la galería. Actívalo en Ajustes para cambiar tu foto.',
+    avatarUploadError: 'No se pudo actualizar tu foto de perfil.',
   },
   auth: {
     loginTitle: 'Bienvenido de nuevo',
@@ -55,6 +66,24 @@ export default {
     aiVoiceProcessing: 'La IA está analizando tu voz...',
     aiFilledField: 'La IA completó esto',
     aiFilledAccount: 'La IA identificó esta cuenta en el recibo',
+  },
+  manage: {
+    paymentClue: 'Pista de pago (opcional)',
+    paymentCluePlaceholder: 'p. ej., 0718, VISA o PayPal',
+    paymentClueHint: 'Ayuda a la IA a asociar automáticamente los recibos a esta cuenta.',
+    cardPreview: 'Vista previa de la tarjeta',
+    premiumGradients: 'Gradientes premium',
+    gradientMetallicGrey: 'Gris metálico',
+    gradientGold: 'Oro',
+    gradientObsidian: 'Negro obsidiana',
+    gradientTitanium: 'Titanio',
+    cardFacility: 'Tipo de tarjeta',
+    debit: 'Débito',
+    credit: 'Crédito',
+    statementDay: 'Día de corte',
+    statementDayPlaceholder: 'p. ej. 15',
+    statementDayHint: 'Las compras posteriores a este día pasan al extracto del mes siguiente.',
+    missingStatementDay: 'Introduce un día de corte entre 1 y 28.',
   },
   categories: {
     category_salary: 'Salario',

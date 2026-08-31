@@ -1,17 +1,25 @@
 import {
+  addBillingMonths,
+  addMonthsClamped,
   Asset,
   AssetSearchResult,
+  billingMonthISO,
   Category,
   CategoryType,
   CurrencyCode,
   DEFAULT_CURRENCY,
+  amountCursorAfterMask,
+  amountInputPlaceholder,
   formatAmountForInput,
   formatAssetLabel,
+  formatCurrency,
   formatDate,
-  formatMoney,
+  maskAmountInput,
   fromISODate,
   i18n,
+  installmentSliceDate,
   parseAmountString,
+  resolveBillingMonth,
   resolveCategoryName,
   toBaseAmount,
   toISODate,
@@ -187,20 +195,6 @@ function generateInstallmentGroupId() {
 
     return value.toString(16);
   });
-}
-
-/**
- * The same calendar day N months later, clamped into a shorter month instead
- * of overflowing into the one after — so a plan started on the 31st still
- * bills once every month rather than skipping one.
- */
-function addMonthsClamped(date: Date, months: number): Date {
-  const targetIndex = date.getMonth() + months;
-  const year = date.getFullYear() + Math.floor(targetIndex / 12);
-  const month = ((targetIndex % 12) + 12) % 12;
-  const daysInTargetMonth = new Date(year, month + 1, 0).getDate();
-
-  return new Date(year, month, Math.min(date.getDate(), daysInTargetMonth));
 }
 
 /** The source account is not part of the AI result, so it is validated alongside it. */
@@ -544,7 +538,7 @@ export default function AddTransactionModal({
 
     return i18n.t('addTransaction.insufficientBalance', {
       account: formatAssetLabel(selectedAsset),
-      amount: formatMoney(currentBalance, DEFAULT_CURRENCY),
+      amount: formatCurrency(currentBalance, DEFAULT_CURRENCY),
     });
   }, [type, selectedAsset, parsedAmount, exchangeRate, balanceByAsset]);
 
@@ -730,9 +724,7 @@ export default function AddTransactionModal({
     const nextAmount = formatAmountForInput(values.amount);
     setAmount(nextAmount);
 
-    if (Platform.OS === 'android') {
-      setAmountSelection({ start: nextAmount.length, end: nextAmount.length });
-    }
+    setAmountSelection({ start: nextAmount.length, end: nextAmount.length });
 
     setTitle(values.title);
     setType(values.type);
@@ -776,35 +768,24 @@ export default function AddTransactionModal({
   }
 
   function handleAmountChange(text: string) {
-    const sanitized = sanitizeAmountInput(text);
+    const masked = maskAmountInput(text);
 
-    if (Platform.OS !== 'android' || isProgrammaticAmountRef.current) {
-      // On Android this also catches the echo that follows a programmatic set,
-      // which is not the user typing — so the sparkle survives it.
-      if (!isProgrammaticAmountRef.current) {
-        clearAiFilled('amount');
-      }
-
+    if (isProgrammaticAmountRef.current) {
       isProgrammaticAmountRef.current = false;
-      setAmount(sanitized);
+      setAmount(masked);
       return;
     }
 
     clearAiFilled('amount');
 
-    const previousLength = amount.length;
-    const cursor = amountSelectionRef.current.start;
-    const lengthDelta = sanitized.length - previousLength;
+    const nextCursor = amountCursorAfterMask(
+      amount,
+      text,
+      masked,
+      amountSelectionRef.current.start,
+    );
 
-    setAmount(sanitized);
-
-    let nextCursor = cursor + lengthDelta;
-
-    if (lengthDelta < 0 && nextCursor > sanitized.length) {
-      nextCursor = sanitized.length;
-    }
-
-    nextCursor = Math.max(0, Math.min(nextCursor, sanitized.length));
+    setAmount(masked);
     setAmountSelection({ start: nextCursor, end: nextCursor });
   }
 
@@ -920,12 +901,21 @@ export default function AddTransactionModal({
     const count = draft.installments;
     const groupId = generateInstallmentGroupId();
     const baseAmount = Math.round((draft.amount / count) * 100) / 100;
+    const statementDay = draft.asset.statement_day;
+    const isCreditPlan =
+      draft.asset.is_credit && statementDay != null && statementDay >= 1 && statementDay <= 28;
+    const creditDay = isCreditPlan ? statementDay : null;
+    const firstBilling = creditDay != null ? resolveBillingMonth(draft.date, creditDay) : null;
 
     const inputs: TransactionInput[] = Array.from({ length: count }, (_, index) => {
       const isLast = index === count - 1;
       const amount = isLast
         ? Math.round((draft.amount - baseAmount * (count - 1)) * 100) / 100
         : baseAmount;
+      const sliceDate =
+        creditDay != null && firstBilling
+          ? installmentSliceDate(draft.date, index, creditDay, firstBilling)
+          : addMonthsClamped(draft.date, index);
 
       return {
         title: `${draft.title} (${index + 1}/${count})`,
@@ -933,7 +923,9 @@ export default function AddTransactionModal({
         currency,
         exchange_rate: exchangeRate,
         type: draft.type,
-        date: toISODate(addMonthsClamped(draft.date, index)),
+        date: toISODate(sliceDate),
+        billing_month:
+          isCreditPlan && firstBilling ? toISODate(addBillingMonths(firstBilling, index)) : null,
         category_id: draft.category?.id ?? null,
         asset_id: draft.asset.id,
         to_asset_id: null,
@@ -968,6 +960,7 @@ export default function AddTransactionModal({
           exchange_rate: exchangeRate,
           type: draft.type,
           date: toISODate(draft.date),
+          billing_month: billingMonthISO(draft.type, draft.date, draft.asset),
           category_id: draft.category?.id ?? null,
           asset_id: draft.asset.id,
           to_asset_id: draft.toAsset?.id ?? null,
@@ -1208,8 +1201,8 @@ export default function AddTransactionModal({
                   onSelectionChange={(event) => {
                     amountSelectionRef.current = event.nativeEvent.selection;
                   }}
-                  selection={Platform.OS === 'android' ? amountSelection : undefined}
-                  placeholder="0,00"
+                  selection={amountSelection}
+                  placeholder={amountInputPlaceholder()}
                   placeholderTextColor={colors.placeholderFaint}
                   keyboardType="decimal-pad"
                   editable={!isInvestmentPurchase}
@@ -1236,13 +1229,29 @@ export default function AddTransactionModal({
                   ) : baseAmount !== null ? (
                     <Text style={styles.baseHintText}>
                       {i18n.t('addTransaction.baseAmountHint', {
-                        amount: formatMoney(baseAmount, DEFAULT_CURRENCY),
+                        amount: formatCurrency(baseAmount, DEFAULT_CURRENCY),
                       })}
                     </Text>
                   ) : null}
                 </View>
               ) : null}
             </View>
+
+            {/* Editing an existing row is a manual correction, so the AI hub is hidden. */}
+            {isEditing ? null : (
+              <SmartDock
+                visible={visible}
+                aiInput={aiInput}
+                onChangeAiInput={setAiInput}
+                onSubmitText={handleParseText}
+                isRecording={isRecording}
+                isVoiceProcessing={isProcessing}
+                isBusy={isAIBusy}
+                onVoicePressIn={startRecording}
+                onVoicePressOut={stopRecording}
+                onScan={() => void handleScanReceipt()}
+              />
+            )}
 
             {/* The direction of the money decides which fields below apply, so it
                 leads the form rather than sitting inside the details card. */}
@@ -1400,7 +1409,7 @@ export default function AddTransactionModal({
                 <Text style={styles.baseHintText}>
                   {i18n.t('addTransaction.installmentsHint', {
                     count: installmentCount,
-                    amount: formatMoney(installmentAmount, currency),
+                    amount: formatCurrency(installmentAmount, currency),
                   })}
                 </Text>
               </View>
@@ -1534,7 +1543,7 @@ export default function AddTransactionModal({
                       {i18n.t('addTransaction.totalDeduction')}
                     </Text>
                     <Text style={styles.holdingTotalValue}>
-                      {formatMoney(holdingTotal, currency)}
+                      {formatCurrency(holdingTotal, currency)}
                     </Text>
                   </View>
                 ) : null}
@@ -1573,22 +1582,6 @@ export default function AddTransactionModal({
                 <ReceiptAnalyzingOverlay title={i18n.t('addTransaction.aiVoiceProcessing')} />
               ) : null}
             </View>
-
-            {/* Editing an existing row is a manual correction, so the AI hub is hidden. */}
-            {isEditing ? null : (
-              <SmartDock
-                visible={visible}
-                aiInput={aiInput}
-                onChangeAiInput={setAiInput}
-                onSubmitText={handleParseText}
-                isRecording={isRecording}
-                isVoiceProcessing={isProcessing}
-                isBusy={isAIBusy}
-                onVoicePressIn={startRecording}
-                onVoicePressOut={stopRecording}
-                onScan={() => void handleScanReceipt()}
-              />
-            )}
           </KeyboardAvoidingView>
 
           {pendingDraft ? (
@@ -1597,13 +1590,13 @@ export default function AddTransactionModal({
                 <Text style={styles.confirmTitle}>{i18n.t('addTransaction.confirmTitle')}</Text>
                 <Text style={styles.confirmLine}>{pendingDraft.title}</Text>
                 <Text style={styles.confirmLine}>
-                  {formatMoney(pendingDraft.amount, currency)}
+                  {formatCurrency(pendingDraft.amount, currency)}
                   {pendingDraft.category ? ` · ${resolveCategoryName(pendingDraft.category)}` : ''}
                 </Text>
                 {currency !== DEFAULT_CURRENCY && Number.isFinite(exchangeRate) ? (
                   <Text style={styles.confirmDate}>
                     {i18n.t('addTransaction.baseAmountHint', {
-                      amount: formatMoney(
+                      amount: formatCurrency(
                         toBaseAmount(pendingDraft.amount, exchangeRate),
                         DEFAULT_CURRENCY,
                       ),
@@ -1951,7 +1944,7 @@ function createStyles(colors: ColorTokens) {
       minHeight: TOUCH_TARGET,
       paddingVertical: spacing.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.borderGlass,
     },
     rowLast: {
       borderBottomWidth: 0,

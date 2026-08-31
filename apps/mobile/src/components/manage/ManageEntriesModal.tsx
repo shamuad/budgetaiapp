@@ -30,6 +30,10 @@ export type ManageEntry<T extends string> = {
   icon: string | null;
   type: T;
   customColor?: string | null;
+  /** How a receipt names this row, for accounts that opted into clue matching. */
+  paymentClue?: string | null;
+  isCredit?: boolean;
+  statementDay?: number | null;
   /** The row's original icon, if it has one — lets the editor offer "Reset to default". */
   defaultIcon?: string | null;
   /** Secondary line, such as the account kind or how often the row is used. */
@@ -45,6 +49,10 @@ type ManageEntriesModalProps<T extends string> = {
   iconChoices: string[];
   /** Enables smart bank logo detection in the editor (accounts only). */
   enableBrandDetect?: boolean;
+  /** Adds the editor's receipt-matching field (accounts only). */
+  showPaymentClue?: boolean;
+  /** Adds debit/credit + statement day (accounts only). */
+  showCreditFacility?: boolean;
   /** Adds a segmented control that narrows the list to one type. */
   filterable?: boolean;
   /** Enables drag-and-drop reordering with a grip handle on each row. */
@@ -150,6 +158,8 @@ export default function ManageEntriesModal<T extends string>({
   typeOptions,
   iconChoices,
   enableBrandDetect = false,
+  showPaymentClue = false,
+  showCreditFacility = false,
   filterable = false,
   reorderable = false,
   addLabel,
@@ -265,18 +275,31 @@ export default function ManageEntriesModal<T extends string>({
               title={isCreating ? createTitle : editTitle}
               initial={
                 isCreating
-                  ? { name: '', icon: '', type: filterable ? filter : typeOptions[0].id, customColor: null }
+                  ? {
+                      name: '',
+                      icon: '',
+                      type: filterable ? filter : typeOptions[0].id,
+                      customColor: null,
+                      paymentClue: null,
+                      isCredit: false,
+                      statementDay: null,
+                    }
                   : {
                       name: target.name,
                       icon: target.icon ?? '',
                       type: target.type,
                       customColor: target.customColor ?? null,
+                      paymentClue: target.paymentClue ?? null,
+                      isCredit: target.isCredit ?? false,
+                      statementDay: target.statementDay ?? null,
                     }
               }
               defaultIcon={isCreating ? null : target.defaultIcon}
               typeOptions={typeOptions}
               iconChoices={iconChoices}
               enableBrandDetect={enableBrandDetect}
+              showPaymentClue={showPaymentClue}
+              showCreditFacility={showCreditFacility}
               isSaving={isSaving}
               onSave={handleSave}
               onDelete={isCreating ? undefined : handleDelete}

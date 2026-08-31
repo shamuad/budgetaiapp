@@ -159,9 +159,10 @@ function toPromptAccounts(value: unknown): PromptAccount[] {
     const id = asString((raw as PromptAccount)?.id);
     const name = asString((raw as PromptAccount)?.name);
     const type = asString((raw as PromptAccount)?.type);
+    const paymentClue = asString((raw as PromptAccount)?.payment_clue);
 
     if (id && name) {
-      accumulated.push({ id, name, type: type || null });
+      accumulated.push({ id, name, type: type || null, payment_clue: paymentClue || null });
     }
 
     return accumulated;

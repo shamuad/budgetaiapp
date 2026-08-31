@@ -47,6 +47,12 @@ export function subscribeToAuthChanges() {
 
   supabase.auth.getSession().then(({ data }) => {
     setSession(data.session ?? null);
+
+    if (data.session) {
+      void import('../lib/api/avatar').then(({ hydrateAvatarFromProfile }) => {
+        void hydrateAvatarFromProfile();
+      });
+    }
   });
 
   const {

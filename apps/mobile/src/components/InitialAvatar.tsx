@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme, type ColorTokens } from '../theming';
 
@@ -7,39 +7,69 @@ type InitialAvatarProps = {
   /** Whatever the caller currently has for a name (or email as a fallback) — first letter is used. */
   name: string;
   size?: number;
+  /** When set, the photo replaces the initial. */
+  uri?: string | null;
+  /** Semi-transparent overlay + spinner while a new photo is uploading. */
+  loading?: boolean;
 };
 
 /**
- * A vibrant, brand-colored circular badge showing the first letter of `name`
- * in bold, high-contrast type — the identity mark until a real profile
- * photo is wired up. Reusable anywhere a user needs a lightweight avatar.
+ * Circular identity mark: a brand-colored initial, or the user's profile photo
+ * once one has been uploaded. The loading overlay sits on top of either state.
  */
-export function InitialAvatar({ name, size = 88 }: InitialAvatarProps) {
+export function InitialAvatar({ name, size = 88, uri, loading = false }: InitialAvatarProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, size), [colors, size]);
   const initial = name.trim().charAt(0).toUpperCase() || '?';
 
   return (
-    <View style={styles.badge}>
-      <Text style={styles.initial}>{initial}</Text>
+    <View style={styles.wrap}>
+      <View style={styles.badge}>
+        {uri ? (
+          <Image source={{ uri }} style={styles.image} accessibilityIgnoresInvertColors />
+        ) : (
+          <Text style={styles.initial}>{initial}</Text>
+        )}
+        {loading ? (
+          <View style={styles.loadingOverlay} pointerEvents="none">
+            <ActivityIndicator color={colors.onBrand} />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 function createStyles(colors: ColorTokens, size: number) {
   return StyleSheet.create({
-    badge: {
+    wrap: {
       width: size,
       height: size,
       borderRadius: size / 2,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: size < 48 ? 2 : 6 },
+      shadowOpacity: size < 48 ? 0.1 : 0.16,
+      shadowRadius: size < 48 ? 6 : 12,
+      elevation: size < 48 ? 2 : 4,
+    },
+    badge: {
+      flex: 1,
+      borderRadius: size / 2,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
       backgroundColor: colors.brand,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.16,
-      shadowRadius: 12,
-      elevation: 4,
+    },
+    image: {
+      ...StyleSheet.absoluteFill,
+      width: size,
+      height: size,
+    },
+    loadingOverlay: {
+      ...StyleSheet.absoluteFill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.overlay,
     },
     initial: {
       fontSize: size * 0.4,

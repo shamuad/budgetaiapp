@@ -28,7 +28,7 @@
 | **@supabase/supabase-js** | ^2.112.3 (via shared) | Postgres client, auth-ready session storage |
 | **@tanstack/react-query** | ^5.101.4 | Server state, caching, mutations |
 | **Zustand** | ^5.0.15 | Client state (theme preference, app store) |
-| **react-native-reanimated** | 4.5.1 | 60fps animations (Smart Dock, overlays, FAB) |
+| **react-native-reanimated** | 4.5.1 | 60fps animations (Smart Dock, overlays, cards) |
 | **react-native-gesture-handler** | ~2.32.0 | Swipe gestures on transaction rows |
 | **i18n-js + expo-localization** | ^4.5.3 / ~57.0.1 | Multi-language (en, tr, nl, es) with English fallback |
 | **Supabase Edge Function** | `ask-gemini` | Gemini multimodal AI (voice, text, receipt), key held server-side |
@@ -58,11 +58,11 @@ apps/mobile/
 ├── app/                      # Expo Router entry points
 │   ├── _layout.tsx           # Root: providers + Stack
 │   └── (tabs)/
-│       ├── _layout.tsx       # 4-tab bottom navigator
+│       ├── _layout.tsx       # 3-tab bottom navigator + TopHeader
 │       ├── index.tsx         # Dashboard
 │       ├── analytics.tsx
-│       ├── transactions.tsx
-│       └── profile.tsx
+│       └── transactions.tsx
+│   ├── profile.tsx           # Profile stack screen (opened from avatar)
 ├── src/
 │   ├── components/           # UI (modals, Smart Dock, screens)
 │   ├── hooks/                # useVoiceRecorder
@@ -85,28 +85,29 @@ flowchart TB
   Theme --> Query["QueryProvider"]
   Query --> Stack["Stack navigator"]
   Stack --> Tabs["(tabs) — headerShown: false"]
+  Stack --> Profile["profile"]
   Tabs --> Dashboard["index — Dashboard"]
   Tabs --> Analytics["analytics"]
   Tabs --> Transactions["transactions"]
-  Tabs --> Profile["profile"]
 ```
 
 **Key routing facts:**
 
 - Root [`app/_layout.tsx`](../apps/mobile/app/_layout.tsx): wraps app in `GestureHandlerRootView` → `SafeAreaProvider` → `ThemeProvider` → `QueryProvider` → themed `Stack`.
-- Only one stack screen: `(tabs)` with `headerShown: false`.
-- **No programmatic routing** — no `router.push`, `Link`, or additional stack routes found.
-- Secondary flows use React Native **`Modal`** overlays, not Expo Router screens.
+- Tab group `(tabs)` has `headerShown: false`. A custom `TopHeader` sits above the tab navigator.
+- Profile is a stack screen (`app/profile.tsx`), opened from the header avatar — not a tab.
+- Add transaction and Options (accounts/categories) live in the tabs layout header actions.
 
 ### Navigation Flow
 
 | User Action | Destination |
 |-------------|-------------|
-| Tab bar | Switch between Dashboard / Analytics / Transactions / Profile |
-| Dashboard FAB (+) | `AddTransactionModal` (create) |
+| Tab bar | Switch between Home / Analytics / Transactions |
+| Header avatar | Profile stack screen |
+| Header + | `AddTransactionModal` (create) |
+| Header gear | `OptionsModal` → Manage Accounts / Categories / Clear Data |
 | Dashboard transaction row tap | `AddTransactionModal` (edit) |
-| Dashboard gear icon | `OptionsModal` → Manage Accounts / Categories / Clear Data |
-| Transactions row tap | `AddTransactionModal` (edit only — **no FAB on this tab**) |
+| Transactions row tap | `AddTransactionModal` (edit) |
 | Transactions filter icon | `TransactionFilterSheet` |
 | Profile theme picker | `setPreference('light' \| 'dark' \| 'auto')` |
 
@@ -136,11 +137,15 @@ The app launches directly into tabs with **no auth gate**. All queries use the *
 
 ### Database Schema (In-Repo View)
 
-Three Supabase tables are actively queried. Base DDL is **not** in this repo; migrations are incremental only.
+Three Supabase tables are actively queried, plus `profiles` for the avatar URL. Base DDL is **not** in this repo; migrations are incremental only.
+
+#### `profiles`
+
+One row per auth user ([`20260829_profiles_avatars.sql`](../supabase/migrations/20260829_profiles_avatars.sql)): `id` (= `auth.users.id`), `avatar_url`, `updated_at`. Photos live in the public Storage bucket `avatars` at `{user_id}/avatar.jpg`.
 
 #### `assets`
 
-Accounts and holdings metadata: `id`, `name`, `symbol`, `type` (`stock|etf|crypto|commodity|cash|card|bank|investment`), `icon`, `custom_color`, `sort_order`, `quantity`, `purchase_price`, `current_price`, `currency`, `created_at`.
+Accounts and holdings metadata: `id`, `name`, `symbol`, `type` (`stock|etf|crypto|commodity|cash|card|bank|investment`), `icon`, `custom_color` (flat `#RRGGBB` or JSON gradient `{"gradient":["#..."],"angle":135}`), `payment_clue`, `is_credit`, `statement_day` (1–28, credit cards only), `sort_order`, `quantity`, `purchase_price`, `current_price`, `currency`, `created_at`. `type = 'card'` is the vessel; `is_credit` is the revolving-credit flag.
 
 #### `categories`
 
@@ -148,13 +153,15 @@ Spending/income categories: `id`, `name`, `icon`, `type`, `is_custom`, `translat
 
 #### `transactions`
 
-Financial events: `id`, `title`, `amount`, `currency`, `exchange_rate`, `type` (`income|expense|transfer`), `date`, `category_id`, `asset_id`, `to_asset_id`, `asset_symbol`, `shares`, `unit_price`, `installment_group_id`, `created_at`. Embeds `categories`, `assets!asset_id`, `assets!to_asset_id` in selects.
+Financial events: `id`, `title`, `amount`, `currency`, `exchange_rate`, `type` (`income|expense|transfer`), `date`, `billing_month`, `category_id`, `asset_id`, `to_asset_id`, `asset_symbol`, `shares`, `unit_price`, `installment_group_id`, `created_at`. Embeds `categories`, `assets!asset_id`, `assets!to_asset_id` in selects.
 
 **Business rules encoded in types** ([`packages/shared/types/database.ts`](../packages/shared/types/database.ts)):
 
 - Transfers use `accountId` / `toAssetId` — never categorized as income/expense
 - Multi-currency via fixed `exchange_rate` at transaction time
 - Investment transfers track `asset_symbol`, `shares`, `unit_price`
+- Credit-card **purchases** are expenses on the card; **paying the card** is a bank→card transfer (`billing_month` stays null)
+- Credit income/expense snapshot `billing_month` (first of the statement month) at write time from `statement_day` (inclusive cutoff). Analytics and “This Month” use `billing_month ?? date`; account **balances** still sum the full ledger (outstanding debt includes unbilled and remaining installments)
 
 ### API Layer & TanStack Query
 
@@ -254,11 +261,11 @@ Presentational only — no AI logic. Three gradient pills:
 - Shown during receipt scan (`isScanningReceipt`) or voice processing (`isProcessing`)
 - Optional `title` prop for context-specific microcopy
 
-#### Dashboard FAB ([`apps/mobile/app/(tabs)/index.tsx`](../apps/mobile/app/(tabs)/index.tsx))
+#### TopHeader ([`apps/mobile/src/components/TopHeader.tsx`](../apps/mobile/src/components/TopHeader.tsx))
 
-- Fixed 56×56 `Pressable`, bottom-right, `colors.brand`, `Plus` icon
-- Opens `AddTransactionModal` for new transactions
-- Separate gear button opens `OptionsModal` (accounts/categories management)
+- Safe-area identity row: circular `InitialAvatar` + time-of-day greeting
+- Right actions: Add Transaction (`+`) and Settings (gear), each a 44×44 hit target
+- Avatar opens the Profile stack screen; `+` / gear open the existing modals from the tabs layout
 
 ---
 

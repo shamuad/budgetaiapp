@@ -131,7 +131,7 @@ function toPromptCategories(categories: Category[]) {
 }
 
 function toPromptAccounts(assets: Asset[]) {
-  return assets.map(({ id, name, type }) => ({ id, name, type }));
+  return assets.map(({ id, name, type, payment_clue }) => ({ id, name, type, payment_clue }));
 }
 
 /**

@@ -35,15 +35,19 @@ export const ACCOUNT_CARD_PALETTE = [
   '#15803D',
 ] as const;
 
-const TYPE_FALLBACK: Record<string, string> = {
-  cash: '#047857',
-  card: '#4338CA',
-  bank: '#0F172A',
-  investment: '#0F766E',
-  default: '#6D28D9',
-};
-
 export { normalizeHexColor } from './colorSpace';
+export {
+  appearancePrimaryColor,
+  getAccountCardColor,
+  gradientMatchesPreset,
+  parseCustomColor,
+  PREMIUM_CARD_GRADIENTS,
+  resolveAccountCardAppearance,
+  serializeFlatColor,
+  serializeGradient,
+  type CardAppearance,
+  type PremiumGradientPreset,
+} from './cardAppearance';
 
 export function isPaletteColor(color: string | null): boolean {
   if (!color) {
@@ -58,18 +62,4 @@ export function isPaletteColor(color: string | null): boolean {
 /** Brand hex from the account name, or null when no bank matches. */
 export function getBrandColor(accountName: string): string | null {
   return resolveBrand(accountName)?.color ?? null;
-}
-
-/** Card background: custom override → bank brand → account-type default. */
-export function getAccountCardColor(asset: {
-  name: string;
-  type: AssetType | null;
-  custom_color?: string | null;
-}): string {
-  return (
-    asset.custom_color ??
-    getBrandColor(asset.name) ??
-    TYPE_FALLBACK[asset.type ?? ''] ??
-    TYPE_FALLBACK.default
-  );
 }

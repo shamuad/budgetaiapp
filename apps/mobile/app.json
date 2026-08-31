@@ -47,7 +47,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can scan receipts.",
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can scan receipts and set a profile photo.",
           "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera so you can scan receipts."
         }
       ]
