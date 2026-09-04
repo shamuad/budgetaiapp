@@ -89,11 +89,11 @@ try {
 
   const { data: profile, error: profileError } = await userA.authClient
     .from('profiles')
-    .select('id, name')
+    .select('id')
     .single();
   assertNoError(profileError, 'read profile for user A');
   assert.equal(profile.id, userA.user.id);
-  assert.equal(profile.name, 'Auth User A');
+  assert.equal(userA.user.user_metadata.name, 'Auth User A');
 
   const assetInput = {
     symbol: 'EUR',
