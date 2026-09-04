@@ -28,7 +28,8 @@ The ordering below is a delivery constraint: later feature work must not bypass 
 ## M1 — Mobile alpha stabilization
 
 - [x] Test sign-up, login, logout, password recovery and user switching against local Supabase.
-- Test receipt and voice AI entry end to end.
+- [x] Test authenticated receipt and voice media from Edge Function input through form mapping with a deterministic Gemini fixture.
+- Validate camera/microphone permissions and live Gemini media accuracy on physical iOS and Android devices.
 - Test transfers, investments, installments and credit-card cycles end to end.
 - Add mobile error monitoring and privacy-safe diagnostics.
 - Add account deletion/export and privacy disclosures.

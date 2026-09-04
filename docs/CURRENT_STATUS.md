@@ -22,6 +22,7 @@
 - English, Turkish, Dutch and Spanish translations
 - Light, dark and automatic mobile themes
 - Server-side Gemini text, voice, categorization and receipt/Vision flows
+- Hermetic local-Supabase coverage for authenticated voice/receipt media, Edge prompts and mobile form mapping
 - Per-user Gemini quotas plus request, media and collection-size limits
 - Authenticated, per-user rate-limited Yahoo Finance search and quote proxy routes
 
@@ -29,12 +30,12 @@
 
 - Expo Doctor: 21/21 checks pass
 - Mobile TypeScript: passes
-- Shared/web unit tests: 45/45 pass when run with the configured TypeScript test runner
+- Shared/web unit tests: 49/49 pass when run with the configured TypeScript test runner
 - Web ESLint: passes
 - Web production build: passes
 
 The root `npm run verify` command and CI workflow are the canonical repeatable checks.
-The database CI job additionally rebuilds Supabase from zero, runs the auth lifecycle integration scenario and runs the pgTAP schema, RLS and quota suites.
+The database CI job additionally rebuilds Supabase from zero, runs the auth lifecycle and deterministic voice/receipt AI integration scenarios, and runs the pgTAP schema, RLS and quota suites.
 
 The hosted Supabase migration history matches all 14 local migrations. The hardened schema and quota migration are deployed, and `ask-gemini` version 11 is active with JWT verification; live smoke tests return `200` for CORS preflight and `401` for an unauthenticated POST.
 
@@ -42,6 +43,7 @@ The hosted Supabase migration history matches all 14 local migrations. The harde
 
 1. EAS/Vercel environment and release configuration is absent.
 2. Privacy, account deletion/export and operational monitoring are absent.
+3. Camera/microphone permissions and live-model media accuracy have not been validated on physical iOS and Android devices.
 
 ## Technical debt to control
 
