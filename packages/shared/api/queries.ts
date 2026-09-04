@@ -39,7 +39,7 @@ import {
   type TransactionRow,
 } from '../lib/api/transactions';
 import { getAssetQuote, searchAssets } from '../lib/api/finance';
-import { toBaseAmount } from '../lib/format';
+import { calculateBalancesByAsset } from '../lib/ledgerBalances';
 
 /** Stable cache keys shared by every consumer in the monorepo. */
 export const queryKeys = {
@@ -57,42 +57,6 @@ export function createQueryClient() {
       },
     },
   });
-}
-
-/**
- * Net recorded movement per account, in the user base currency.
- * A transfer is booked as double entry: it leaves the source account and
- * lands in the destination, so both sides move while the combined total
- * stays flat.
- */
-function calculateBalancesByAsset(rows: TransactionRow[]) {
-  const totals = new Map<string, number>();
-
-  const add = (assetId: string, delta: number) => {
-    totals.set(assetId, (totals.get(assetId) ?? 0) + delta);
-  };
-
-  for (const row of rows) {
-    const base = toBaseAmount(row.amount, row.exchange_rate);
-
-    if (row.type === 'transfer') {
-      if (row.asset_id) {
-        add(row.asset_id, -base);
-      }
-
-      if (row.to_asset_id) {
-        add(row.to_asset_id, base);
-      }
-
-      continue;
-    }
-
-    if (row.asset_id) {
-      add(row.asset_id, row.type === 'expense' ? -base : base);
-    }
-  }
-
-  return totals;
 }
 
 function invalidateTransactions(queryClient: QueryClient) {

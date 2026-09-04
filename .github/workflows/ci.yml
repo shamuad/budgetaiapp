@@ -101,5 +101,14 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
           npm run test:integration:ai-media
 
+      - name: Test financial transaction lifecycle
+        shell: bash
+        run: |
+          status_json="$(supabase status -o json)"
+          SUPABASE_URL="$(jq -er '.API_URL' <<<"$status_json")" \
+          SUPABASE_ANON_KEY="$(jq -er '.ANON_KEY // .PUBLISHABLE_KEY' <<<"$status_json")" \
+          SUPABASE_SERVICE_ROLE_KEY="$(jq -er '.SERVICE_ROLE_KEY // .SECRET_KEY' <<<"$status_json")" \
+          npm run test:integration:financial
+
       - name: Test schema, RLS isolation and request quotas
         run: supabase test db
