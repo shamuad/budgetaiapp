@@ -53,7 +53,7 @@ export default {
     newPasswordTitle: 'Establece una nueva contraseña',
     newPasswordSubtitle: 'Elige una nueva contraseña para tu cuenta.',
     newPasswordLabel: 'Nueva Contraseña',
-    passwordTooShort: 'La contraseña debe tener al menos 6 caracteres.',
+    passwordTooShort: 'La contraseña debe tener al menos 8 caracteres.',
     savePassword: 'Guardar Contraseña',
   },
   addTransaction: {

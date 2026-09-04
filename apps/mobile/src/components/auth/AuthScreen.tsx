@@ -1,4 +1,4 @@
-import { getSupabase, i18n } from '@budgetaiapp/shared';
+import { getSupabase, i18n, MIN_PASSWORD_LENGTH } from '@budgetaiapp/shared';
 import { Link } from 'expo-router';
 import { Apple, Eye, EyeOff, Lock, Mail, User } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
@@ -60,6 +60,11 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
     if (!password) {
       setErrorMessage(i18n.t('auth.missingPassword'));
+      return;
+    }
+
+    if (!isLogin && password.length < MIN_PASSWORD_LENGTH) {
+      setErrorMessage(i18n.t('auth.passwordTooShort'));
       return;
     }
 

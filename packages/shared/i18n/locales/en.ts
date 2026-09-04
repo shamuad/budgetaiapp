@@ -69,7 +69,7 @@ export default {
     newPasswordTitle: 'Set a new password',
     newPasswordSubtitle: 'Choose a new password for your account.',
     newPasswordLabel: 'New Password',
-    passwordTooShort: 'Password must be at least 6 characters.',
+    passwordTooShort: 'Password must be at least 8 characters.',
     savePassword: 'Save Password',
   },
   dashboard: {

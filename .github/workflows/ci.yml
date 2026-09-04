@@ -53,5 +53,23 @@ jobs:
       - name: Smoke-test Edge Function startup
         run: curl --fail --silent --show-error --request OPTIONS http://127.0.0.1:54321/functions/v1/ask-gemini --output /dev/null
 
+      - name: Test mobile auth recovery and user switching
+        shell: bash
+        run: |
+          status_json="$(supabase status -o json)"
+          api_url="$(jq -r '.API_URL // empty' <<<"$status_json")"
+          anon_key="$(jq -r '.ANON_KEY // .PUBLISHABLE_KEY // empty' <<<"$status_json")"
+          service_role_key="$(jq -r '.SERVICE_ROLE_KEY // .SECRET_KEY // empty' <<<"$status_json")"
+
+          if [[ -z "$api_url" || -z "$anon_key" || -z "$service_role_key" ]]; then
+            echo "Supabase local credentials were not available."
+            exit 1
+          fi
+
+          SUPABASE_URL="$api_url" \
+          SUPABASE_ANON_KEY="$anon_key" \
+          SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+          npm run test:integration:auth
+
       - name: Test schema, RLS isolation and request quotas
         run: supabase test db

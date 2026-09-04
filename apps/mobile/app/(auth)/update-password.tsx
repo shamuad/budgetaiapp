@@ -1,4 +1,4 @@
-import { getSupabase, i18n, useAuthStore } from '@budgetaiapp/shared';
+import { getSupabase, i18n, MIN_PASSWORD_LENGTH, useAuthStore } from '@budgetaiapp/shared';
 import { Eye, EyeOff, Lock } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import {
@@ -16,8 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { radius, spacing, TOUCH_TARGET } from '../../src/theme';
 import { useAppTheme, type ColorTokens } from '../../src/theming';
-
-const MIN_PASSWORD_LENGTH = 6;
 
 /**
  * Where a Supabase recovery deep link lands. The link has already established
