@@ -86,7 +86,7 @@ function startGeminiMock(category: Category, asset: Asset) {
       if (media?.mimeType === 'audio/mp4') {
         assert.equal(media.data, voiceFixture);
         assert.match(prompt, /The user request is in the attached audio\./);
-        assert.match(prompt, /Expense categories: Market\./);
+        assert.match(prompt, /Expense categories: Food Groceries\./);
         assert.match(prompt, /Daily Card \(card\)/);
 
         modelText = JSON.stringify({
@@ -106,7 +106,7 @@ function startGeminiMock(category: Category, asset: Asset) {
         });
       } else if (media?.mimeType === 'image/png') {
         assert.equal(media.data, receiptFixture);
-        assert.match(prompt, new RegExp(`${category.id} \\| Market \\(expense\\)`));
+        assert.match(prompt, new RegExp(`${category.id} \\| Food Groceries \\(expense\\)`));
         assert.match(
           prompt,
           new RegExp(`${asset.id} \\| Daily Card \\| card \\| payment_clue: 0718`),
@@ -174,14 +174,14 @@ async function main() {
     assert.ok(signup.user?.id, 'Local signup should return a user id');
     createdUserId = signup.user.id;
 
-    const { data: market, error: categoryError } = await authClient
+    const { data: groceries, error: categoryError } = await authClient
       .from('categories')
       .select('*')
-      .eq('name', 'Market')
+      .eq('translation_key', 'category_food_groceries')
       .eq('type', 'expense')
       .single<Category>();
     assert.ifError(categoryError);
-    assert.ok(market, 'The default Market category should exist');
+    assert.ok(groceries, 'The default Food Groceries category should exist');
 
     const { data: asset, error: assetError } = await authClient
       .from('assets')
@@ -202,9 +202,9 @@ async function main() {
     assert.ifError(assetError);
     assert.ok(asset, 'The test account should be returned');
 
-    mockServer = await startGeminiMock(market, asset);
+    mockServer = await startGeminiMock(groceries, asset);
     const common = {
-      categories: promptCategories([market]),
+      categories: promptCategories([groceries]),
       accounts: promptAccounts([asset]),
       today: testDate,
       weekday: 'Friday',
@@ -218,11 +218,16 @@ async function main() {
       audio_mime_type: 'audio/mp4',
       ...common,
     });
-    const voice = parseTransactionAIResponse(voiceText, [market], [asset], new Date(2026, 0, 1));
+    const voice = parseTransactionAIResponse(
+      voiceText,
+      [groceries],
+      [asset],
+      new Date(2026, 0, 1),
+    );
 
     assert.equal(voice.values?.title, 'Albert Heijn');
     assert.equal(voice.values?.amount, 42.5);
-    assert.equal(voice.values?.category?.id, market.id);
+    assert.equal(voice.values?.category?.id, groceries.id);
     assert.equal(voice.values?.asset?.id, asset.id);
     assert.equal(toISODate(voice.values!.date), testDate);
 
@@ -234,14 +239,14 @@ async function main() {
     });
     const receipt = parseReceiptAIResponse(
       receiptText,
-      [market],
+      [groceries],
       [asset],
       new Date(2026, 0, 1),
     );
 
     assert.equal(receipt.action, 'none');
     assert.equal(receipt.values?.title, 'Albert Heijn');
-    assert.equal(receipt.values?.category?.id, market.id);
+    assert.equal(receipt.values?.category?.id, groceries.id);
     assert.equal(receipt.values?.asset?.id, asset.id);
     assert.equal(receipt.values?.currency, 'EUR');
     assert.equal(mockRequests, 2, 'Both media requests should reach the local Gemini fixture');

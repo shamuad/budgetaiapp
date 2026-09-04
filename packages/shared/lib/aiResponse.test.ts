@@ -9,13 +9,13 @@ import {
 } from './aiResponse';
 import { toISODate } from './valueParsing';
 
-const market: Category = {
+const groceries: Category = {
   id: '11111111-1111-4111-8111-111111111111',
-  name: 'Market',
+  name: 'Food Groceries',
   type: 'expense',
   icon: '🛒',
   is_custom: false,
-  translation_key: 'category_market',
+  translation_key: 'category_food_groceries',
   is_active: true,
   group_code: 'needs',
   color_code: null,
@@ -23,7 +23,7 @@ const market: Category = {
 };
 
 const salary: Category = {
-  ...market,
+  ...groceries,
   id: '22222222-2222-4222-8222-222222222222',
   name: 'Salary',
   type: 'income',
@@ -57,21 +57,21 @@ describe('AI media response mapping', () => {
         title: 'Albert Heijn',
         amount: '42,50',
         type: 'expense',
-        category: 'Market (expense)',
+        category: 'Food Groceries (expense)',
         account_name: 'daily card',
         currency: 'euro',
         installments: 1,
         date: '2026-09-04',
         action: 'none',
       }),
-      [market, salary],
+      [groceries, salary],
       [card],
       new Date(2026, 0, 1),
     );
 
     assert.equal(result.action, 'none');
     assert.equal(result.values?.amount, 42.5);
-    assert.equal(result.values?.category?.id, market.id);
+    assert.equal(result.values?.category?.id, groceries.id);
     assert.equal(result.values?.asset?.id, card.id);
     assert.equal(result.values?.currency, 'EUR');
     assert.equal(toISODate(result.values!.date), '2026-09-04');
@@ -85,18 +85,18 @@ describe('AI media response mapping', () => {
         amount: 42.5,
         currency: 'EUR',
         date: '2026-09-04',
-        category_id: market.id,
+        category_id: groceries.id,
         account_id: card.id,
         type: 'expense',
         installments: 2,
       }),
-      [market, salary],
+      [groceries, salary],
       [card],
       new Date(2026, 0, 1),
     );
 
     assert.equal(result.action, 'none');
-    assert.equal(result.values?.category?.id, market.id);
+    assert.equal(result.values?.category?.id, groceries.id);
     assert.equal(result.values?.asset?.id, card.id);
     assert.equal(result.values?.installments, 2);
     assert.equal(result.values?.toAsset, null);
@@ -105,7 +105,7 @@ describe('AI media response mapping', () => {
   it('does not guess a category when a receipt invents an id', () => {
     const result = parseReceiptAIResponse(
       JSON.stringify({ amount: 12, category_id: 'invented-id', type: 'expense' }),
-      [market],
+      [groceries],
       [card],
       new Date(2026, 0, 1),
     );
@@ -115,11 +115,11 @@ describe('AI media response mapping', () => {
 
   it('returns stable error codes for malformed and amount-less model replies', () => {
     assert.throws(
-      () => parseTransactionAIResponse('not-json', [market], [card], new Date()),
+      () => parseTransactionAIResponse('not-json', [groceries], [card], new Date()),
       (error) => error instanceof AIResponseError && error.code === 'invalid_response',
     );
     assert.throws(
-      () => parseReceiptAIResponse('{"amount": 0}', [market], [card], new Date()),
+      () => parseReceiptAIResponse('{"amount": 0}', [groceries], [card], new Date()),
       (error) => error instanceof AIResponseError && error.code === 'no_amount',
     );
   });
