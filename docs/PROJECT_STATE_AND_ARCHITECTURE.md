@@ -1,6 +1,6 @@
 # Budgree Architecture
 
-**Verified against:** `feat/api-abuse-protection`, based on `main` at `318e52f3cbdf2377b65728af6844d8221eeb8207`
+**Verified against:** `main` at `d349cf1b21acebcf438afe4c9f50688e5cdade41`
 
 **Verification date:** 2026-09-04
 
@@ -59,6 +59,8 @@ The current implementation fetches the full transaction ledger and calculates ba
 Text, voice and receipt inputs call the JWT-protected `ask-gemini` Supabase Edge Function. Gemini credentials and prompts live server-side; no Gemini key belongs in the mobile bundle. The function supports transaction parsing, category suggestions and receipt scanning with model fallback and request timeouts.
 
 An authenticated database function atomically enforces a short AI burst limit and a monthly allowance per user. The Edge Function also rejects oversized HTTP bodies, text, category/account lists, audio and receipt images before contacting Gemini. Quota counters are not directly readable or writable by API roles.
+
+The hosted database migration history is aligned with the repository, both security migrations are deployed, and hosted `ask-gemini` version 11 runs with JWT verification enabled.
 
 ## Internationalization and theming
 
