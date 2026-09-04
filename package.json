@@ -14,6 +14,10 @@
     "typecheck:shared": "tsc -p packages/shared/tsconfig.json --noEmit --pretty false",
     "typecheck:web": "npm run typecheck --workspace=web",
     "test": "tsx --test packages/shared/lib/*.test.ts packages/shared/utils/*.test.ts",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "test:db": "supabase test db",
+    "verify:db": "npm run db:reset && npm run test:db",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
     "postinstall": "patch-package"
   },
@@ -23,6 +27,7 @@
   "devDependencies": {
     "@types/node": "^20",
     "patch-package": "^8.0.1",
+    "supabase": "2.116.0",
     "tsx": "^4.20.5",
     "typescript": "^6.0.3"
   }

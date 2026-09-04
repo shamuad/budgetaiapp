@@ -2,7 +2,7 @@
 
 **Product stage:** authenticated mobile alpha
 
-**Code snapshot reviewed:** `main` at `bb0ad29851d29b7721f9d1888c7cecafbdc176b2`
+**Code snapshot reviewed:** `feat/supabase-schema-baseline`, based on `main` at `71176812d7f67db0986a8b4b12edcc6efec7c689`
 
 **Last reviewed:** 2026-09-04
 
@@ -11,6 +11,8 @@
 - Expo Router authentication and protected navigation
 - Supabase email/password login, sign-up, sign-out and password recovery
 - Owner-scoped RLS migrations for financial data and profiles
+- Reproducible Supabase core schema, deterministic local seed and versioned local configuration
+- Two-user database tests for CRUD isolation and cross-tenant relationship rejection
 - Account, category and transaction CRUD
 - Transfers, investment holdings, installments and credit-card billing periods
 - Dashboard and analytics views
@@ -30,14 +32,14 @@
 - Web production build: passes
 
 The root `npm run verify` command and CI workflow are the canonical repeatable checks.
+The database CI job additionally rebuilds Supabase from zero and runs the pgTAP schema/RLS suites.
 
 ## Production blockers
 
-1. The core Supabase base schema is not represented by a baseline migration.
-2. RLS has no automated two-user integration test.
-3. Edge Function JWT deployment behavior, quotas, rate limiting and payload limits are not fully version-controlled.
-4. EAS/Vercel environment and release configuration is absent.
-5. Privacy, account deletion/export and operational monitoring are absent.
+1. The Gemini Edge Function still needs per-user quotas, rate limiting and explicit media/request-size limits.
+2. Public finance proxy routes need authentication/abuse protection before deployment.
+3. EAS/Vercel environment and release configuration is absent.
+4. Privacy, account deletion/export and operational monitoring are absent.
 
 ## Technical debt to control
 
