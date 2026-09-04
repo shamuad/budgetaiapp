@@ -162,100 +162,107 @@ async function invoke(accessToken: string, body: Record<string, unknown>) {
   return payload.text;
 }
 
-let mockServer: Awaited<ReturnType<typeof startGeminiMock>> | null = null;
+async function main() {
+  let mockServer: Awaited<ReturnType<typeof startGeminiMock>> | null = null;
 
-try {
-  const authClient = createClient(supabaseUrl, anonKey, clientOptions);
-  const { data: signup, error: signupError } = await authClient.auth.signUp({ email, password });
+  try {
+    const authClient = createClient(supabaseUrl, anonKey, clientOptions);
+    const { data: signup, error: signupError } = await authClient.auth.signUp({ email, password });
 
-  assert.ifError(signupError);
-  assert.ok(signup.session?.access_token, 'Local signup should create an authenticated session');
-  assert.ok(signup.user?.id, 'Local signup should return a user id');
-  createdUserId = signup.user.id;
+    assert.ifError(signupError);
+    assert.ok(signup.session?.access_token, 'Local signup should create an authenticated session');
+    assert.ok(signup.user?.id, 'Local signup should return a user id');
+    createdUserId = signup.user.id;
 
-  const { data: market, error: categoryError } = await authClient
-    .from('categories')
-    .select('*')
-    .eq('name', 'Market')
-    .eq('type', 'expense')
-    .single<Category>();
-  assert.ifError(categoryError);
-  assert.ok(market, 'The default Market category should exist');
+    const { data: market, error: categoryError } = await authClient
+      .from('categories')
+      .select('*')
+      .eq('name', 'Market')
+      .eq('type', 'expense')
+      .single<Category>();
+    assert.ifError(categoryError);
+    assert.ok(market, 'The default Market category should exist');
 
-  const { data: asset, error: assetError } = await authClient
-    .from('assets')
-    .insert({
-      name: 'Daily Card',
-      symbol: 'EUR',
-      type: 'card',
-      icon: '💳',
-      payment_clue: '0718',
-      quantity: 0,
-      purchase_price: 0,
-      current_price: 0,
-      currency: 'EUR',
-      is_credit: false,
-    })
-    .select('*')
-    .single<Asset>();
-  assert.ifError(assetError);
-  assert.ok(asset, 'The test account should be returned');
+    const { data: asset, error: assetError } = await authClient
+      .from('assets')
+      .insert({
+        name: 'Daily Card',
+        symbol: 'EUR',
+        type: 'card',
+        icon: '💳',
+        payment_clue: '0718',
+        quantity: 0,
+        purchase_price: 0,
+        current_price: 0,
+        currency: 'EUR',
+        is_credit: false,
+      })
+      .select('*')
+      .single<Asset>();
+    assert.ifError(assetError);
+    assert.ok(asset, 'The test account should be returned');
 
-  mockServer = await startGeminiMock(market, asset);
-  const common = {
-    categories: promptCategories([market]),
-    accounts: promptAccounts([asset]),
-    today: testDate,
-    weekday: 'Friday',
-  };
-  const accessToken = signup.session.access_token;
+    mockServer = await startGeminiMock(market, asset);
+    const common = {
+      categories: promptCategories([market]),
+      accounts: promptAccounts([asset]),
+      today: testDate,
+      weekday: 'Friday',
+    };
+    const accessToken = signup.session.access_token;
 
-  const voiceText = await invoke(accessToken, {
-    action: 'parse_transaction',
-    text: null,
-    audio_base64: voiceFixture,
-    audio_mime_type: 'audio/mp4',
-    ...common,
-  });
-  const voice = parseTransactionAIResponse(voiceText, [market], [asset], new Date(2026, 0, 1));
+    const voiceText = await invoke(accessToken, {
+      action: 'parse_transaction',
+      text: null,
+      audio_base64: voiceFixture,
+      audio_mime_type: 'audio/mp4',
+      ...common,
+    });
+    const voice = parseTransactionAIResponse(voiceText, [market], [asset], new Date(2026, 0, 1));
 
-  assert.equal(voice.values?.title, 'Albert Heijn');
-  assert.equal(voice.values?.amount, 42.5);
-  assert.equal(voice.values?.category?.id, market.id);
-  assert.equal(voice.values?.asset?.id, asset.id);
-  assert.equal(toISODate(voice.values!.date), testDate);
+    assert.equal(voice.values?.title, 'Albert Heijn');
+    assert.equal(voice.values?.amount, 42.5);
+    assert.equal(voice.values?.category?.id, market.id);
+    assert.equal(voice.values?.asset?.id, asset.id);
+    assert.equal(toISODate(voice.values!.date), testDate);
 
-  const receiptText = await invoke(accessToken, {
-    action: 'scan_receipt',
-    image_base64: receiptFixture,
-    image_mime_type: 'image/png',
-    ...common,
-  });
-  const receipt = parseReceiptAIResponse(
-    receiptText,
-    [market],
-    [asset],
-    new Date(2026, 0, 1),
-  );
-
-  assert.equal(receipt.action, 'none');
-  assert.equal(receipt.values?.title, 'Albert Heijn');
-  assert.equal(receipt.values?.category?.id, market.id);
-  assert.equal(receipt.values?.asset?.id, asset.id);
-  assert.equal(receipt.values?.currency, 'EUR');
-  assert.equal(mockRequests, 2, 'Both media requests should reach the local Gemini fixture');
-  assert.ifError(mockFailure);
-
-  console.log('AI voice and receipt integration passed.');
-} finally {
-  if (mockServer) {
-    await new Promise<void>((resolve, reject) =>
-      mockServer!.close((error) => (error ? reject(error) : resolve())),
+    const receiptText = await invoke(accessToken, {
+      action: 'scan_receipt',
+      image_base64: receiptFixture,
+      image_mime_type: 'image/png',
+      ...common,
+    });
+    const receipt = parseReceiptAIResponse(
+      receiptText,
+      [market],
+      [asset],
+      new Date(2026, 0, 1),
     );
-  }
 
-  if (createdUserId) {
-    const { error } = await admin.auth.admin.deleteUser(createdUserId);
-    assert.ifError(error);
+    assert.equal(receipt.action, 'none');
+    assert.equal(receipt.values?.title, 'Albert Heijn');
+    assert.equal(receipt.values?.category?.id, market.id);
+    assert.equal(receipt.values?.asset?.id, asset.id);
+    assert.equal(receipt.values?.currency, 'EUR');
+    assert.equal(mockRequests, 2, 'Both media requests should reach the local Gemini fixture');
+    assert.ifError(mockFailure);
+
+    console.log('AI voice and receipt integration passed.');
+  } finally {
+    if (mockServer) {
+      await new Promise<void>((resolve, reject) =>
+        mockServer!.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+
+    if (createdUserId) {
+      const { error } = await admin.auth.admin.deleteUser(createdUserId);
+      assert.ifError(error);
+    }
   }
 }
+
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
