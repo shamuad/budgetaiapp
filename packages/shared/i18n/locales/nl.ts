@@ -53,7 +53,7 @@ export default {
     newPasswordTitle: 'Stel een nieuw wachtwoord in',
     newPasswordSubtitle: 'Kies een nieuw wachtwoord voor je account.',
     newPasswordLabel: 'Nieuw Wachtwoord',
-    passwordTooShort: 'Wachtwoord moet minstens 6 tekens zijn.',
+    passwordTooShort: 'Wachtwoord moet minstens 8 tekens zijn.',
     savePassword: 'Wachtwoord Opslaan',
   },
   addTransaction: {

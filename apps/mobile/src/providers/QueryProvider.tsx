@@ -1,4 +1,8 @@
-import { createQueryClient, useAuthStore } from '@budgetaiapp/shared';
+import {
+  createQueryClient,
+  shouldClearUserScopedCache,
+  useAuthStore,
+} from '@budgetaiapp/shared';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 
@@ -34,7 +38,7 @@ function ClearCacheOnAuthChange() {
   const previousUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    if (previousUserIdRef.current !== undefined && previousUserIdRef.current !== userId) {
+    if (shouldClearUserScopedCache(previousUserIdRef.current, userId)) {
       queryClient.clear();
     }
 

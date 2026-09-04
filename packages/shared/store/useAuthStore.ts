@@ -32,6 +32,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (error) {
       throw error;
     }
+
+    set({ isPasswordRecovery: false });
   },
 }));
 
@@ -64,6 +66,11 @@ export function subscribeToAuthChanges() {
     // arrives first wins, and both mean the same thing here.
     if (event === 'PASSWORD_RECOVERY') {
       setIsPasswordRecovery(true);
+    } else if (event === 'SIGNED_IN' || !session) {
+      // A later normal sign-in or any sign-out must not inherit a recovery
+      // guard from an earlier session in the same app process. For PKCE
+      // recovery, the deep-link handler sets the flag after SIGNED_IN.
+      setIsPasswordRecovery(false);
     }
 
     setSession(session);

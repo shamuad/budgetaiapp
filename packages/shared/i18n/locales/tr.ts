@@ -69,7 +69,7 @@ export default {
     newPasswordTitle: 'Yeni bir şifre belirle',
     newPasswordSubtitle: 'Hesabın için yeni bir şifre seç.',
     newPasswordLabel: 'Yeni Şifre',
-    passwordTooShort: 'Şifre en az 6 karakter olmalı.',
+    passwordTooShort: 'Şifre en az 8 karakter olmalı.',
     savePassword: 'Şifreyi Kaydet',
   },
   dashboard: {
