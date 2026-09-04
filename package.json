@@ -15,6 +15,7 @@
     "typecheck:web": "npm run typecheck --workspace=web",
     "test": "tsx --test apps/web/lib/*.test.ts packages/shared/lib/*.test.ts packages/shared/utils/*.test.ts",
     "test:integration:auth": "node supabase/tests/integration/auth-flow.mjs",
+    "test:integration:ai-media": "tsx supabase/tests/integration/ai-media-flow.ts",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
     "test:db": "supabase test db",
