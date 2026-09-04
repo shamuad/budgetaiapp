@@ -66,23 +66,17 @@ select throws_ok(
   '42501'
 );
 
-select is(
-  (with changed as (
-    update public.assets set name = 'Compromised'
+select is_empty(
+  $$update public.assets set name = 'Compromised'
     where id = 'b1000000-0000-4000-8000-000000000002'
-    returning 1
-  ) select count(*) from changed),
-  0::bigint,
+    returning id$$,
   'user A cannot update user B account'
 );
 
-select is(
-  (with removed as (
-    delete from public.assets
+select is_empty(
+  $$delete from public.assets
     where id = 'b1000000-0000-4000-8000-000000000002'
-    returning 1
-  ) select count(*) from removed),
-  0::bigint,
+    returning id$$,
   'user A cannot delete user B account'
 );
 
