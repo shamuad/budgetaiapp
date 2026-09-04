@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
+import { authorizeFinanceRequest } from '@/lib/financeAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ const SUPPORTED_QUOTE_TYPES = new Set(['EQUITY', 'ETF', 'MUTUALFUND', 'CRYPTOCUR
 const EUR_EXCHANGES = new Set(['AMS', 'PAR', 'BRU', 'GER', 'FRA', 'MIL', 'VIE', 'MCE']);
 
 const MAX_RESULTS = 12;
+const MAX_QUERY_LENGTH = 80;
 
 export type AssetSearchResult = {
   symbol: string;
@@ -55,10 +57,26 @@ function isEuroPriority(quote: SupportedYahooQuote): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const access = await authorizeFinanceRequest(request, 'finance_search');
+
+  if (!access.allowed) {
+    return access.response;
+  }
+
   const query = request.nextUrl.searchParams.get('query')?.trim();
 
   if (!query) {
-    return Response.json({ results: [] satisfies AssetSearchResult[] });
+    return Response.json(
+      { results: [] satisfies AssetSearchResult[] },
+      { headers: access.responseHeaders },
+    );
+  }
+
+  if (query.length > MAX_QUERY_LENGTH) {
+    return Response.json(
+      { error: 'Search query is too long.' },
+      { status: 400, headers: access.responseHeaders },
+    );
   }
 
   try {
@@ -80,10 +98,13 @@ export async function GET(request: NextRequest) {
       type: quote.typeDisp ?? quote.quoteType,
     }));
 
-    return Response.json({ results });
+    return Response.json({ results }, { headers: access.responseHeaders });
   } catch (error) {
     console.error('[finance/search] Yahoo Finance lookup failed', error);
     // A flaky upstream should never break the dropdown — an empty list is always safe.
-    return Response.json({ results: [] satisfies AssetSearchResult[] });
+    return Response.json(
+      { results: [] satisfies AssetSearchResult[] },
+      { headers: access.responseHeaders },
+    );
   }
 }

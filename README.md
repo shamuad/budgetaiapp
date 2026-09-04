@@ -6,7 +6,7 @@ Budgree is a personal-finance product built as an npm-workspaces monorepo. The m
 
 The mobile application is an authenticated alpha. It includes account, category and transaction management; transfers and investment holdings; installments and credit-card billing periods; analytics; light/dark/automatic themes; and Gemini-assisted text, voice and receipt entry.
 
-It is not production-ready yet. The database can be rebuilt from versioned migrations and its tenant isolation is covered by two-user RLS tests, but AI quotas, public finance-route protection and release/privacy operations still need hardening. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
+It is not production-ready yet. The database can be rebuilt from versioned migrations, tenant isolation is covered by two-user RLS tests, and AI/finance entry points have authenticated per-user limits. Release configuration, hosted rollout and privacy operations remain incomplete. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
 
 ## Workspaces
 
@@ -31,7 +31,7 @@ Install dependencies from the repository root:
 npm ci
 ```
 
-Copy `apps/mobile/.env.example` to `apps/mobile/.env` and provide the public Supabase URL and anon key. The Gemini key must remain a Supabase secret and must never be placed in an `EXPO_PUBLIC_*` variable.
+Copy `apps/mobile/.env.example` to `apps/mobile/.env` and provide the public Supabase URL and anon key. Copy `apps/web/.env.example` to `apps/web/.env.local` so the server-side finance routes can validate Supabase sessions. The Gemini key must remain a Supabase secret and must never be placed in an `EXPO_PUBLIC_*` variable.
 
 Run the applications:
 
@@ -48,7 +48,7 @@ Run the same quality gate used by CI:
 npm run verify
 ```
 
-This runs web linting, TypeScript checks for all workspaces, shared unit tests and the web production build.
+This runs web linting, TypeScript checks for all workspaces, shared/web unit tests and the web production build.
 
 Rebuild and test the local database:
 

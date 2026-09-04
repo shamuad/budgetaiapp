@@ -2,7 +2,7 @@
 
 **Product stage:** authenticated mobile alpha
 
-**Code snapshot reviewed:** `feat/supabase-schema-baseline`, based on `main` at `71176812d7f67db0986a8b4b12edcc6efec7c689`
+**Code snapshot reviewed:** `feat/api-abuse-protection`, based on `main` at `318e52f3cbdf2377b65728af6844d8221eeb8207`
 
 **Last reviewed:** 2026-09-04
 
@@ -21,13 +21,14 @@
 - English, Turkish, Dutch and Spanish translations
 - Light, dark and automatic mobile themes
 - Server-side Gemini text, voice, categorization and receipt/Vision flows
-- Yahoo Finance search and quote proxy routes in the web workspace
+- Per-user Gemini quotas plus request, media and collection-size limits
+- Authenticated, per-user rate-limited Yahoo Finance search and quote proxy routes
 
 ## Verification
 
 - Expo Doctor: 21/21 checks pass
 - Mobile TypeScript: passes
-- Shared unit tests: 37/37 pass when run with the configured TypeScript test runner
+- Shared/web unit tests: 41/41 pass when run with the configured TypeScript test runner
 - Web ESLint: passes
 - Web production build: passes
 
@@ -36,10 +37,9 @@ The database CI job additionally rebuilds Supabase from zero and runs the pgTAP 
 
 ## Production blockers
 
-1. The Gemini Edge Function still needs per-user quotas, rate limiting and explicit media/request-size limits.
-2. Public finance proxy routes need authentication/abuse protection before deployment.
-3. EAS/Vercel environment and release configuration is absent.
-4. Privacy, account deletion/export and operational monitoring are absent.
+1. The new quota migration and updated Gemini Edge Function still need a controlled hosted Supabase rollout.
+2. EAS/Vercel environment and release configuration is absent.
+3. Privacy, account deletion/export and operational monitoring are absent.
 
 ## Technical debt to control
 
@@ -47,4 +47,3 @@ The database CI job additionally rebuilds Supabase from zero and runs the pgTAP 
 - The full ledger is fetched and aggregated on the client.
 - The user base currency remains fixed to EUR.
 - The visible web page is still a framework starter.
-- Public finance proxy routes need abuse protection before deployment.
