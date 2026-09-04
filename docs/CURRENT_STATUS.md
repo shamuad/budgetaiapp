@@ -2,7 +2,7 @@
 
 **Product stage:** authenticated mobile alpha
 
-**Code snapshot reviewed:** `feat/api-abuse-protection`, based on `main` at `318e52f3cbdf2377b65728af6844d8221eeb8207`
+**Code snapshot reviewed:** `main` at `d349cf1b21acebcf438afe4c9f50688e5cdade41`
 
 **Last reviewed:** 2026-09-04
 
@@ -33,13 +33,14 @@
 - Web production build: passes
 
 The root `npm run verify` command and CI workflow are the canonical repeatable checks.
-The database CI job additionally rebuilds Supabase from zero and runs the pgTAP schema/RLS suites.
+The database CI job additionally rebuilds Supabase from zero and runs the pgTAP schema, RLS and quota suites.
+
+The hosted Supabase migration history matches all 14 local migrations. The hardened schema and quota migration are deployed, and `ask-gemini` version 11 is active with JWT verification; live smoke tests return `200` for CORS preflight and `401` for an unauthenticated POST.
 
 ## Production blockers
 
-1. The new quota migration and updated Gemini Edge Function still need a controlled hosted Supabase rollout.
-2. EAS/Vercel environment and release configuration is absent.
-3. Privacy, account deletion/export and operational monitoring are absent.
+1. EAS/Vercel environment and release configuration is absent.
+2. Privacy, account deletion/export and operational monitoring are absent.
 
 ## Technical debt to control
 

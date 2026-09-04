@@ -6,7 +6,7 @@ Budgree is a personal-finance product built as an npm-workspaces monorepo. The m
 
 The mobile application is an authenticated alpha. It includes account, category and transaction management; transfers and investment holdings; installments and credit-card billing periods; analytics; light/dark/automatic themes; and Gemini-assisted text, voice and receipt entry.
 
-It is not production-ready yet. The database can be rebuilt from versioned migrations, tenant isolation is covered by two-user RLS tests, and AI/finance entry points have authenticated per-user limits. Release configuration, hosted rollout and privacy operations remain incomplete. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
+It is not production-ready yet. The database can be rebuilt from versioned migrations, tenant isolation is covered by two-user RLS tests, and AI/finance entry points have authenticated per-user limits. Release hosting/configuration and privacy operations remain incomplete. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
 
 ## Workspaces
 
