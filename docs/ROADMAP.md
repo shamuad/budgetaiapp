@@ -30,7 +30,8 @@ The ordering below is a delivery constraint: later feature work must not bypass 
 - [x] Test sign-up, login, logout, password recovery and user switching against local Supabase.
 - [x] Test authenticated receipt and voice media from Edge Function input through form mapping with a deterministic Gemini fixture.
 - Validate camera/microphone permissions and live Gemini media accuracy on physical iOS and Android devices.
-- Test transfers, investments, installments and credit-card cycles end to end.
+- Verify transfers, investment purchases, installments and credit-card cycles through shared calculations and local-Supabase API integration (see FINANCIAL_TESTS.md).
+- Exercise these financial flows through native mobile screens on a device.
 - Add mobile error monitoring and privacy-safe diagnostics.
 - Add account deletion/export and privacy disclosures.
 - Configure EAS development, preview and production profiles.

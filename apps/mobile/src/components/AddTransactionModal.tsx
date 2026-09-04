@@ -1,6 +1,5 @@
 import {
-  addBillingMonths,
-  addMonthsClamped,
+  buildInstallmentPlan,
   Asset,
   AssetSearchResult,
   billingMonthISO,
@@ -17,9 +16,7 @@ import {
   maskAmountInput,
   fromISODate,
   i18n,
-  installmentSliceDate,
   parseAmountString,
-  resolveBillingMonth,
   resolveCategoryName,
   toBaseAmount,
   toISODate,
@@ -898,44 +895,21 @@ export default function AddTransactionModal({
    * back to exactly the original total.
    */
   async function saveInstallmentPlan(draft: TransactionDraft) {
-    const count = draft.installments;
-    const groupId = generateInstallmentGroupId();
-    const baseAmount = Math.round((draft.amount / count) * 100) / 100;
-    const statementDay = draft.asset.statement_day;
-    const isCreditPlan =
-      draft.asset.is_credit && statementDay != null && statementDay >= 1 && statementDay <= 28;
-    const creditDay = isCreditPlan ? statementDay : null;
-    const firstBilling = creditDay != null ? resolveBillingMonth(draft.date, creditDay) : null;
-
-    const inputs: TransactionInput[] = Array.from({ length: count }, (_, index) => {
-      const isLast = index === count - 1;
-      const amount = isLast
-        ? Math.round((draft.amount - baseAmount * (count - 1)) * 100) / 100
-        : baseAmount;
-      const sliceDate =
-        creditDay != null && firstBilling
-          ? installmentSliceDate(draft.date, index, creditDay, firstBilling)
-          : addMonthsClamped(draft.date, index);
-
-      return {
-        title: `${draft.title} (${index + 1}/${count})`,
-        amount,
-        currency,
-        exchange_rate: exchangeRate,
-        type: draft.type,
-        date: toISODate(sliceDate),
-        billing_month:
-          isCreditPlan && firstBilling ? toISODate(addBillingMonths(firstBilling, index)) : null,
-        category_id: draft.category?.id ?? null,
-        asset_id: draft.asset.id,
-        to_asset_id: null,
-        asset_symbol: null,
-        shares: null,
-        unit_price: null,
-        installment_group_id: groupId,
-      };
+    if (draft.type === 'transfer') {
+      throw new Error('Transfers cannot be split into installments.');
+    }
+    const inputs = buildInstallmentPlan({
+      title: draft.title,
+      amount: draft.amount,
+      installments: draft.installments,
+      type: draft.type,
+      date: draft.date,
+      asset: draft.asset,
+      categoryId: draft.category?.id ?? null,
+      currency,
+      exchangeRate,
+      groupId: generateInstallmentGroupId(),
     });
-
     await createTransactionsBatchMutation.mutateAsync(inputs);
   }
 

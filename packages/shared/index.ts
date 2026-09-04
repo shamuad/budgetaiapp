@@ -3,6 +3,7 @@ export { getSupabase } from './lib/supabase';
 export * from './lib/authLinks';
 export * from './lib/authSession';
 export * from './lib/aiResponse';
+export * from './lib/installmentPlan';
 export * from './config/apiConfig';
 export * from './lib/api/assets';
 export * from './lib/api/avatar';
