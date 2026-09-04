@@ -27,6 +27,13 @@ export const lightColors = {
   brandLight: '#6366F1',
   brandSoft: '#C7D2FE',
   brandSurface: '#EEF2FF',
+  // Budgree brand accent — AI assistant surfaces, logo, growth/success
+  // moments, glow effects. Never a general button color.
+  budgree: '#00C94F',
+  budgreeStrong: '#00A840',
+  budgreeSurface: 'rgba(0, 201, 79, 0.10)',
+  budgreeBorder: 'rgba(0, 201, 79, 0.28)',
+  budgreeGlow: 'rgba(0, 232, 92, 0.30)',
   income: '#059669',
   expense: '#DC2626',
   danger: '#DC2626',
@@ -41,11 +48,11 @@ export const lightColors = {
   onBrand: '#FFFFFF',
   // The AI panel: a saturated indigo block in light mode, and a deep glass
   // surface in dark mode, where a vivid fill would glare against the canvas.
-  aiSurface: '#4F46E5',
-  aiSurfaceStrong: '#312E81',
+  aiSurface: '#00C94F',
+  aiSurfaceStrong: '#00A840',
   aiBorder: 'transparent',
   aiText: '#FFFFFF',
-  aiTextMuted: '#C7D2FE',
+  aiTextMuted: '#B8F5CE',
   // Warm gold accent, reserved for the premium badge alone.
   premium: '#B45309',
   premiumSurface: '#FEF3C7',
@@ -71,6 +78,13 @@ export const darkColors = {
   brandLight: '#818CF8',
   brandSoft: '#312E81',
   brandSurface: 'rgba(99, 102, 241, 0.16)',
+  // Budgree brand accent — AI assistant surfaces, logo, growth/success
+  // moments, glow effects. Never a general button color.
+  budgree: '#00E85C',
+  budgreeStrong: '#33F27E',
+  budgreeSurface: 'rgba(0, 232, 92, 0.12)',
+  budgreeBorder: 'rgba(0, 232, 92, 0.32)',
+  budgreeGlow: 'rgba(0, 232, 92, 0.45)',
   income: '#34D399',
   expense: '#F87171',
   danger: '#F87171',
@@ -81,11 +95,11 @@ export const darkColors = {
   warningSurface: 'rgba(251, 191, 36, 0.16)',
   overlay: 'rgba(0, 0, 0, 0.6)',
   onBrand: '#FFFFFF',
-  aiSurface: 'rgba(99, 102, 241, 0.14)',
-  aiSurfaceStrong: '#4338CA',
-  aiBorder: 'rgba(129, 140, 248, 0.32)',
-  aiText: '#EEF0FF',
-  aiTextMuted: '#A5B4FC',
+  aiSurface: 'rgba(0, 232, 92, 0.14)',
+  aiSurfaceStrong: '#00A840',
+  aiBorder: 'rgba(0, 232, 92, 0.32)',
+  aiText: '#EAFFF2',
+  aiTextMuted: '#7FE8A6',
   // Warm gold accent, reserved for the premium badge alone.
   premium: '#F5C451',
   premiumSurface: 'rgba(245, 196, 81, 0.14)',

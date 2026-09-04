@@ -78,6 +78,11 @@ export default {
     recentActivity: 'Recent Activity',
     emptyAssets: 'No assets added yet',
     emptyTransactions: 'No transactions yet',
+    seeAll: 'See All',
+    sectionToday: 'Today',
+    sectionYesterday: 'Yesterday',
+    sectionThisWeek: 'This Week',
+    sectionEarlier: 'Earlier',
   },
   settings: {
     title: 'Options',
@@ -176,6 +181,8 @@ export default {
     filterReset: 'Reset',
     filterApply: 'Apply',
     noResults: 'No transactions match these filters',
+    filteredByAccount: 'Account: %{name}',
+    clearFilter: 'Clear filter',
   },
   transactionActions: {
     edit: 'Edit',

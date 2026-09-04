@@ -28,6 +28,18 @@
 - Semantic Theming: NEVER hardcode surface or text colors (e.g., avoid hardcoded `#ffffff` or `#000000`). Always use theme-aware tokens/props for backgrounds, borders, card surfaces, and high-contrast text.
 - Form factor & Polish: Use elegant border-radius, clean dividers, proper SafeAreaView margins, and subtle adaptive shadows/elevations that look natural in both light and dark modes.
 - Never replace database-driven UI elements (like category emojis/dynamic bank logos) with generic placeholders.
+- COLOR SEMANTICS (three distinct roles, never interchangeable):
+  - `brand` (indigo) — structural interface: buttons, active tabs, FAB, links.
+  - `budgree` (green) — brand accent ONLY: AI assistant surfaces, logo,
+    growth/success moments, glow effects. Never a general button color.
+  - `income` (green) / `expense` — semantic transaction direction only.
+  Green appearing in three roles is intentional. Do not consolidate them.
+- Colors come from `useAppTheme()`. Spacing, radius and TOUCH_TARGET come
+  from `src/theme.ts`. Never import colors from `src/theme.ts` — it is the
+  legacy light-only palette, retained for its non-color values.
+- Any new color token must be added to BOTH `lightColors` and `darkColors`
+  in `src/theming/tokens.ts`. The `ColorTokens` type enforces this.
+- Minimum tappable area is 44pt (TOUCH_TARGET), per iOS HIG.
 
 5. CORE FEATURES
 - The Gemini AI / Vision parsing logic is the core product value. Never alter, mock, or simplify this integration. 

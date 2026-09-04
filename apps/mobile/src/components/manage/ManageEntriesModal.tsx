@@ -1,6 +1,6 @@
 import { i18n, isRemoteIcon } from '@budgetaiapp/shared';
 import { ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react-native';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -57,6 +57,8 @@ type ManageEntriesModalProps<T extends string> = {
   filterable?: boolean;
   /** Enables drag-and-drop reordering with a grip handle on each row. */
   reorderable?: boolean;
+  /** Opens straight into the "create" editor, e.g. from the dashboard's "Add Account" tile. */
+  startInCreateMode?: boolean;
   addLabel: string;
   createTitle: string;
   editTitle: string;
@@ -162,6 +164,7 @@ export default function ManageEntriesModal<T extends string>({
   showCreditFacility = false,
   filterable = false,
   reorderable = false,
+  startInCreateMode = false,
   addLabel,
   createTitle,
   editTitle,
@@ -182,6 +185,14 @@ export default function ManageEntriesModal<T extends string>({
     [entries, filterable, filter],
   );
   const isCreating = target === NEW_ENTRY;
+
+  // Lets a caller (e.g. the dashboard's "Add Account" tile) jump straight to
+  // the create editor instead of landing on the plain list first.
+  useEffect(() => {
+    if (visible && startInCreateMode) {
+      setTarget(NEW_ENTRY);
+    }
+  }, [visible, startInCreateMode]);
 
   const closeEditor = () => setTarget(null);
 

@@ -78,6 +78,11 @@ export default {
     recentActivity: 'Son Hareketler',
     emptyAssets: 'Henüz varlık eklenmedi',
     emptyTransactions: 'Henüz işlem yok',
+    seeAll: 'Tümünü Gör',
+    sectionToday: 'Bugün',
+    sectionYesterday: 'Dün',
+    sectionThisWeek: 'Bu Hafta',
+    sectionEarlier: 'Daha Önce',
   },
   settings: {
     title: 'Seçenekler',
@@ -176,6 +181,8 @@ export default {
     filterReset: 'Sıfırla',
     filterApply: 'Uygula',
     noResults: 'Bu filtrelere uyan işlem yok',
+    filteredByAccount: 'Hesap: %{name}',
+    clearFilter: 'Filtreyi temizle',
   },
   transactionActions: {
     edit: 'Düzenle',

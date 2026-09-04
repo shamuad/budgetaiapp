@@ -22,6 +22,10 @@ import { spacing } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
 import CardSurface from './CardSurface';
 
+/** Fixed card size — exported so the Dashboard can size the trailing "Add Account" tile to match. */
+export const ACCOUNT_CARD_WIDTH = 200;
+export const ACCOUNT_CARD_HEIGHT = 126;
+
 type AccountCardProps = {
   asset: Asset;
   balance: number;
@@ -125,8 +129,8 @@ export default function AccountCard({
 function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
     cardWrap: {
-      width: 200,
-      height: 126,
+      width: ACCOUNT_CARD_WIDTH,
+      height: ACCOUNT_CARD_HEIGHT,
       borderRadius: 18,
       shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 16 },

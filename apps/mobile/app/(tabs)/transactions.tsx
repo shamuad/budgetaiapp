@@ -1,15 +1,18 @@
 import {
   Category,
+  formatAssetLabel,
   formatDate,
   formatCurrency,
   i18n,
   TransactionRow,
   transactionPeriodDate,
+  useAssets,
   useCategories,
   useTransactions,
 } from '@budgetaiapp/shared';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, SlidersHorizontal } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, SlidersHorizontal, X } from 'lucide-react-native';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import AddTransactionModal from '../../src/components/AddTransactionModal';
@@ -42,10 +45,29 @@ export default function TransactionsScreen() {
     },
   });
   const { categories } = useCategories();
+  const { assets } = useAssets();
+  const { filterAccountId } = useLocalSearchParams<{ filterAccountId?: string }>();
   const [editingTransaction, setEditingTransaction] = useState<TransactionRow | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [filters, setFilters] = useState<TransactionFilterDraft>(EMPTY_FILTERS);
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
+  const [accountFilter, setAccountFilter] = useState<string | null>(filterAccountId ?? null);
+
+  // Arriving from the Dashboard's "See All" link scopes the list to that
+  // account; arriving via the tab bar carries no param, so this stays null.
+  useEffect(() => {
+    setAccountFilter(filterAccountId ?? null);
+  }, [filterAccountId]);
+
+  const filteredAccount = useMemo(
+    () => assets.find((asset) => asset.id === accountFilter) ?? null,
+    [assets, accountFilter],
+  );
+
+  function clearAccountFilter() {
+    setAccountFilter(null);
+    router.setParams({ filterAccountId: '' });
+  }
 
   const hasAdvancedFilters =
     filters.categoryIds.length > 0 || filters.dateFrom !== null || filters.dateTo !== null;
@@ -53,6 +75,10 @@ export default function TransactionsScreen() {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((row) => {
       if (typeFilter !== 'all' && row.type !== typeFilter) {
+        return false;
+      }
+
+      if (accountFilter && row.asset_id !== accountFilter && row.to_asset_id !== accountFilter) {
         return false;
       }
 
@@ -77,7 +103,7 @@ export default function TransactionsScreen() {
 
       return true;
     });
-  }, [transactions, typeFilter, filters]);
+  }, [transactions, typeFilter, accountFilter, filters]);
 
   function renderTransaction({ item }: { item: TransactionRow }) {
     const isIncome = item.type === 'income';
@@ -86,33 +112,37 @@ export default function TransactionsScreen() {
     const groupId = item.installment_group_id;
 
     return (
-      <TransactionItem
-        icon={
-          isTransfer ? (
-            <ArrowRightLeft color={colors.textMuted} size={20} />
-          ) : isIncome ? (
-            <ArrowDownLeft color={colors.income} size={20} />
-          ) : (
-            <ArrowUpRight color={colors.expense} size={20} />
-          )
-        }
-        title={item.title}
-        subtitle={formatDate(item.date, 'short')}
-        account={transactionAccount(item)}
-        amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatCurrency(item.amount, item.currency)}`}
-        positive={isIncome}
-        onEdit={() => setEditingTransaction(item)}
-        onDelete={() => (groupId ? removeGroup(groupId) : remove(item.id))}
-        deleteConfirmation={
-          groupId
-            ? {
-                title: i18n.t('transactionActions.installmentDeleteTitle'),
-                message: i18n.t('transactionActions.installmentDeleteMessage'),
-                confirmLabel: i18n.t('transactionActions.deleteAll'),
-              }
-            : undefined
-        }
-      />
+      <View style={styles.listRow}>
+        <TransactionItem
+          flat
+          icon={
+            isTransfer ? (
+              <ArrowRightLeft color={colors.textMuted} size={20} />
+            ) : isIncome ? (
+              <ArrowDownLeft color={colors.income} size={20} />
+            ) : (
+              <ArrowUpRight color={colors.expense} size={20} />
+            )
+          }
+          title={item.title}
+          subtitle={formatDate(item.date, 'short')}
+          account={transactionAccount(item)}
+          amount={`${isTransfer ? '' : isIncome ? '+' : '-'}${formatCurrency(item.amount, item.currency)}`}
+          positive={isIncome}
+          negative={!isIncome && !isTransfer}
+          onEdit={() => setEditingTransaction(item)}
+          onDelete={() => (groupId ? removeGroup(groupId) : remove(item.id))}
+          deleteConfirmation={
+            groupId
+              ? {
+                  title: i18n.t('transactionActions.installmentDeleteTitle'),
+                  message: i18n.t('transactionActions.installmentDeleteMessage'),
+                  confirmLabel: i18n.t('transactionActions.deleteAll'),
+                }
+              : undefined
+          }
+        />
+      </View>
     );
   }
 
@@ -165,12 +195,30 @@ export default function TransactionsScreen() {
         </TouchableOpacity>
       </View>
 
+      {filteredAccount && (
+        <View style={styles.accountChipRow}>
+          <View style={styles.accountChip}>
+            <Text style={styles.accountChipText} numberOfLines={1}>
+              {i18n.t('transactions.filteredByAccount', { name: formatAssetLabel(filteredAccount) })}
+            </Text>
+            <TouchableOpacity
+              onPress={clearAccountFilter}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={i18n.t('transactions.clearFilter')}>
+              <X color={colors.textMuted} size={14} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <FlatList
         style={styles.screen}
         contentContainerStyle={styles.content}
         data={filteredTransactions}
         keyExtractor={(item) => item.id}
         renderItem={renderTransaction}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <Text style={styles.empty}>
             {transactions.length === 0
@@ -205,7 +253,34 @@ function createStyles(colors: ColorTokens) {
     },
     content: {
       padding: spacing.lg,
-      gap: spacing.md,
+    },
+    listRow: {
+      paddingVertical: spacing.md,
+    },
+    separator: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    accountChipRow: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      backgroundColor: colors.background,
+    },
+    accountChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceElevated,
+    },
+    accountChipText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.text,
+      flexShrink: 1,
     },
     filterBar: {
       flexDirection: 'row',
@@ -220,17 +295,18 @@ function createStyles(colors: ColorTokens) {
     },
     pillRow: {
       flexDirection: 'row',
-      gap: spacing.sm,
+      gap: spacing.lg,
       paddingVertical: spacing.xs,
     },
+    // Sleeker than a filled pill: a quiet underline keeps the header
+    // sophisticated and minimal instead of a bright block of color.
     pill: {
-      paddingVertical: spacing.xs + 2,
-      paddingHorizontal: spacing.md,
-      borderRadius: 999,
-      backgroundColor: colors.surfaceElevated,
+      paddingBottom: spacing.xs,
+      borderBottomWidth: 2,
+      borderBottomColor: 'transparent',
     },
     pillActive: {
-      backgroundColor: colors.brand,
+      borderBottomColor: colors.brand,
     },
     pillLabel: {
       fontSize: 13,
@@ -238,7 +314,7 @@ function createStyles(colors: ColorTokens) {
       color: colors.textMuted,
     },
     pillLabelActive: {
-      color: colors.onBrand,
+      color: colors.brand,
     },
     filterButton: {
       width: TOUCH_TARGET - 4,

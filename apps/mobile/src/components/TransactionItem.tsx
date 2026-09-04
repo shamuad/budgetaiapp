@@ -23,6 +23,8 @@ type TransactionItemProps = {
   subtitle: string;
   amount: string;
   positive?: boolean;
+  /** Semantic outflow — expenses only. Transfers stay neutral. */
+  negative?: boolean;
   /** Account shown under the amount, with its bank mark. Hidden when absent. */
   account?: TransactionAccount | null;
   /** Drops the card background, for rows that already sit inside one. */
@@ -70,6 +72,7 @@ export default function TransactionItem({
   subtitle,
   amount,
   positive,
+  negative,
   account,
   flat,
   onEdit,
@@ -137,7 +140,13 @@ export default function TransactionItem({
           </Text>
         </View>
         <View style={styles.trailing}>
-          <Text style={[styles.amount, positive && styles.amountPositive]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.amount,
+              positive && styles.amountPositive,
+              negative && styles.amountNegative,
+            ]}
+            numberOfLines={1}>
             {amount}
           </Text>
           {account ? (
@@ -276,6 +285,9 @@ function createStyles(colors: ColorTokens) {
     },
     amountPositive: {
       color: colors.income,
+    },
+    amountNegative: {
+      color: colors.expense,
     },
     accountRow: {
       flexDirection: 'row',

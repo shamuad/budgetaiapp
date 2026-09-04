@@ -32,9 +32,12 @@ function toSymbol(name: string) {
 export default function ManageAccountsModal({
   visible,
   onClose,
+  startInCreateMode,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Opens straight into the "new account" editor, e.g. from the dashboard's "Add Account" tile. */
+  startInCreateMode?: boolean;
 }) {
   const { assets } = useAssets();
   const { transactions } = useTransactionsQuery();
@@ -108,6 +111,7 @@ export default function ManageAccountsModal({
       showPaymentClue
       showCreditFacility
       reorderable
+      startInCreateMode={startInCreateMode}
       addLabel={i18n.t('manage.addAccount')}
       createTitle={i18n.t('manage.newAccount')}
       editTitle={i18n.t('manage.editAccount')}
