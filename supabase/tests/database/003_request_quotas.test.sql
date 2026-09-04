@@ -16,6 +16,7 @@ set local "request.jwt.claim.role" = 'anon';
 select throws_ok(
   $$select public.consume_request_quota('ai')$$,
   '42501',
+  'permission denied for function consume_request_quota',
   'anon cannot consume an authenticated quota'
 );
 
@@ -92,12 +93,14 @@ select ok(
 select throws_ok(
   $$select public.consume_request_quota('not_a_resource')$$,
   '22023',
+  'Unknown quota resource.',
   'callers cannot invent quota resources or limits'
 );
 
 select throws_ok(
   $$select count(*) from public.request_quota_counters$$,
   '42501',
+  'permission denied for table request_quota_counters',
   'authenticated clients cannot inspect quota counters'
 );
 
