@@ -1,4 +1,18 @@
 import { getFinanceApiBaseUrl } from '../../config/apiConfig';
+import { getSupabase } from '../supabase';
+
+async function authenticatedRequest(signal?: AbortSignal): Promise<RequestInit> {
+  const { data, error } = await getSupabase().auth.getSession();
+
+  if (error || !data.session?.access_token) {
+    throw new Error('A signed-in session is required.');
+  }
+
+  return {
+    signal,
+    headers: { Authorization: `Bearer ${data.session.access_token}` },
+  };
+}
 
 export type AssetSearchResult = {
   symbol: string;
@@ -14,7 +28,7 @@ export async function searchAssets(query: string, signal?: AbortSignal): Promise
   }
 
   const url = `${getFinanceApiBaseUrl()}/api/finance/search?query=${encodeURIComponent(trimmed)}`;
-  const response = await fetch(url, { signal });
+  const response = await fetch(url, await authenticatedRequest(signal));
 
   if (!response.ok) {
     throw new Error('Asset search is temporarily unavailable.');
@@ -37,7 +51,7 @@ export async function getAssetQuote(symbol: string, signal?: AbortSignal): Promi
   }
 
   const url = `${getFinanceApiBaseUrl()}/api/finance/quote?symbol=${encodeURIComponent(trimmed)}`;
-  const response = await fetch(url, { signal });
+  const response = await fetch(url, await authenticatedRequest(signal));
 
   if (!response.ok) {
     return null;

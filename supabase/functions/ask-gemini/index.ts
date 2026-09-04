@@ -50,6 +50,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'Retry-After, X-RateLimit-Remaining',
 };
 
 /**
@@ -68,6 +69,36 @@ const RETRY_NEXT_MODEL_STATUSES = [404, 429, 503];
 // back instead of an isolate the platform killed mid-request.
 const MODEL_TIMEOUT_MS = 30_000;
 
+// Base64 is roughly 4/3 the decoded size. The total HTTP ceiling protects the
+// isolate before JSON parsing, while the media ceilings keep expensive Gemini
+// prompts predictable even when the request itself is otherwise valid.
+const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
+const MAX_TEXT_LENGTH = 4_000;
+const MAX_LEGACY_PROMPT_LENGTH = 64_000;
+const MAX_CATEGORIES = 100;
+const MAX_ACCOUNTS = 50;
+
+const IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+]);
+const AUDIO_MIME_TYPES = new Set([
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/webm',
+  'audio/ogg',
+]);
+
 type InlinePart = { inlineData: { mimeType: string; data: string } };
 
 /** What the app sends: prompt strings, plus base64 audio or receipt images. */
@@ -75,10 +106,20 @@ type IncomingPart = string | InlinePart;
 
 type GeminiPart = { text: string } | InlinePart;
 
-function json(body: Record<string, unknown>, status: number) {
+class RequestValidationError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+function json(body: Record<string, unknown>, status: number, headers?: HeadersInit) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', ...headers },
   });
 }
 
@@ -125,10 +166,193 @@ type RequestBody = {
   weekday?: unknown;
 };
 
+type QuotaDecision = {
+  allowed?: boolean;
+  reason?: string;
+  remaining?: number;
+  retry_after_seconds?: number;
+};
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function assertStringLength(value: unknown, field: string, maximum: number) {
+  if (typeof value === 'string' && value.length > maximum) {
+    throw new RequestValidationError(
+      'payload_too_large',
+      `"${field}" exceeds the allowed size.`,
+      413,
+    );
+  }
+}
+
+function decodedBase64Size(value: string): number {
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  return Math.floor((value.length * 3) / 4) - padding;
+}
+
+function assertMedia(
+  value: unknown,
+  mimeType: unknown,
+  field: string,
+  allowedMimeTypes: Set<string>,
+  fallbackMimeType: string,
+  maximumBytes: number,
+) {
+  if (typeof value !== 'string' || !value) {
+    return;
+  }
+
+  if (
+    value.length % 4 !== 0 ||
+    value.length > Math.ceil((maximumBytes * 4) / 3) + 4 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(value)
+  ) {
+    throw new RequestValidationError(
+      'payload_too_large',
+      `"${field}" is invalid or exceeds the allowed size.`,
+      413,
+    );
+  }
+
+  if (decodedBase64Size(value) > maximumBytes) {
+    throw new RequestValidationError(
+      'payload_too_large',
+      `"${field}" exceeds the allowed size.`,
+      413,
+    );
+  }
+
+  const normalizedMimeType = asString(mimeType) || fallbackMimeType;
+
+  if (!allowedMimeTypes.has(normalizedMimeType.toLowerCase())) {
+    throw new RequestValidationError(
+      'unsupported_media_type',
+      `"${field}" has an unsupported media type.`,
+      415,
+    );
+  }
+}
+
+function validateBodyLimits(body: RequestBody) {
+  assertStringLength(body.text, 'text', MAX_TEXT_LENGTH);
+  assertStringLength(body.title, 'title', MAX_TEXT_LENGTH);
+
+  if (Array.isArray(body.categories) && body.categories.length > MAX_CATEGORIES) {
+    throw new RequestValidationError('payload_too_large', 'Too many categories were sent.', 413);
+  }
+
+  if (Array.isArray(body.accounts) && body.accounts.length > MAX_ACCOUNTS) {
+    throw new RequestValidationError('payload_too_large', 'Too many accounts were sent.', 413);
+  }
+
+  assertMedia(
+    body.audio_base64,
+    body.audio_mime_type,
+    'audio_base64',
+    AUDIO_MIME_TYPES,
+    'audio/m4a',
+    MAX_AUDIO_BYTES,
+  );
+  assertMedia(
+    body.image_base64,
+    body.image_mime_type,
+    'image_base64',
+    IMAGE_MIME_TYPES,
+    'image/jpeg',
+    MAX_IMAGE_BYTES,
+  );
+
+  if (body.parts !== undefined) {
+    if (!Array.isArray(body.parts) || body.parts.length > 4) {
+      throw new RequestValidationError('payload_too_large', 'Too many legacy prompt parts.', 413);
+    }
+
+    for (const part of body.parts) {
+      if (typeof part === 'string') {
+        assertStringLength(part, 'parts', MAX_LEGACY_PROMPT_LENGTH);
+      } else if (isInlinePart(part)) {
+        const mimeType = part.inlineData.mimeType.toLowerCase();
+        const isImage = IMAGE_MIME_TYPES.has(mimeType);
+        const isAudio = AUDIO_MIME_TYPES.has(mimeType);
+
+        if (!isImage && !isAudio) {
+          throw new RequestValidationError(
+            'unsupported_media_type',
+            'A legacy prompt part has an unsupported media type.',
+            415,
+          );
+        }
+
+        assertMedia(
+          part.inlineData.data,
+          mimeType,
+          'parts.inlineData',
+          isImage ? IMAGE_MIME_TYPES : AUDIO_MIME_TYPES,
+          mimeType,
+          isImage ? MAX_IMAGE_BYTES : MAX_AUDIO_BYTES,
+        );
+      }
+    }
+  }
+}
+
+async function consumeAiQuota(request: Request): Promise<HeadersInit | Response> {
+  const authorization = request.headers.get('authorization');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
+  if (!authorization?.match(/^Bearer\s+\S+$/i)) {
+    return json({ error: 'unauthorized', message: 'A signed-in session is required.' }, 401);
+  }
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('ask-gemini: Supabase quota environment is not configured');
+    return json({ error: 'quota_unavailable', message: 'Quota service is not configured.' }, 503);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/rpc/consume_request_quota`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: supabaseAnonKey,
+          authorization,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_resource: 'ai' }),
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`ask-gemini: quota request failed: ${message}`);
+    return json({ error: 'quota_unavailable', message: 'Quota service is unavailable.' }, 503);
+  }
+
+  if (!response.ok) {
+    console.error(`ask-gemini: quota service returned HTTP ${response.status}`);
+    return json({ error: 'quota_unavailable', message: 'Quota service is unavailable.' }, 503);
+  }
+
+  const quota = (await response.json()) as QuotaDecision;
+  const retryAfter = Math.max(1, Math.ceil(quota.retry_after_seconds ?? 1));
+
+  if (quota.allowed !== true) {
+    const code = quota.reason === 'quota_exhausted' ? 'quota_exhausted' : 'rate_limited';
+    return json({ error: code, message: 'AI request allowance has been reached.' }, 429, {
+      'Retry-After': String(retryAfter),
+      'X-RateLimit-Remaining': '0',
+    });
+  }
+
+  return { 'X-RateLimit-Remaining': String(Math.max(0, quota.remaining ?? 0)) };
 }
 
 /** Drops anything malformed rather than sending a half-built list to the model. */
@@ -327,10 +551,34 @@ Deno.serve(async (request) => {
       );
     }
 
+    const contentLength = Number(request.headers.get('content-length'));
+
+    if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+      return json(
+        { error: 'payload_too_large', message: 'The request exceeds the allowed size.' },
+        413,
+      );
+    }
+
+    let rawBody: string;
+
+    try {
+      rawBody = await request.text();
+    } catch {
+      return json({ error: 'invalid_body', message: 'The request body was not valid JSON.' }, 400);
+    }
+
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
+      return json(
+        { error: 'payload_too_large', message: 'The request exceeds the allowed size.' },
+        413,
+      );
+    }
+
     let body: RequestBody;
 
     try {
-      body = ((await request.json()) ?? {}) as RequestBody;
+      body = (JSON.parse(rawBody) ?? {}) as RequestBody;
     } catch {
       return json({ error: 'invalid_body', message: 'The request body was not valid JSON.' }, 400);
     }
@@ -338,9 +586,14 @@ Deno.serve(async (request) => {
     let parts: GeminiPart[];
 
     try {
+      validateBodyLimits(body);
       parts = buildParts(body);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+
+      if (error instanceof RequestValidationError) {
+        return json({ error: error.code, message }, error.status);
+      }
 
       return json({ error: 'invalid_body', message }, 400);
     }
@@ -348,6 +601,14 @@ Deno.serve(async (request) => {
     if (parts.length === 0) {
       return json({ error: 'invalid_body', message: 'No usable prompt parts were sent.' }, 400);
     }
+
+    const quotaResult = await consumeAiQuota(request);
+
+    if (quotaResult instanceof Response) {
+      return quotaResult;
+    }
+
+    const quotaHeaders = quotaResult;
 
     console.log(`ask-gemini: action=${asString(body.action) || 'legacy_parts'}`);
 
@@ -401,19 +662,27 @@ Deno.serve(async (request) => {
 
         console.error(`Gemini ${model} failed (${response.status}): ${message}`);
 
-        return json({ error: 'upstream_error', message, status: response.status }, 502);
+        return json(
+          { error: 'upstream_error', message, status: response.status },
+          502,
+          quotaHeaders,
+        );
       }
 
       const text = readResponseText(await response.json());
 
       if (!text) {
-        return json({ error: 'empty_response', message: `${model} returned no text.` }, 502);
+        return json(
+          { error: 'empty_response', message: `${model} returned no text.` },
+          502,
+          quotaHeaders,
+        );
       }
 
-      return json({ text }, 200);
+      return json({ text }, 200, quotaHeaders);
     }
 
-    return json({ error: 'model_overloaded', message: lastMessage }, lastStatus);
+    return json({ error: 'model_overloaded', message: lastMessage }, lastStatus, quotaHeaders);
   } catch (error) {
     // Without this the runtime's own 500 goes out with no CORS headers, which
     // reaches the app as an opaque failure with nothing to read.

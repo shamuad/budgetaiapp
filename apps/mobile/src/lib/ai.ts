@@ -64,6 +64,26 @@ function messageForCode(code: string | null): string | null {
     return i18n.t('addTransaction.aiBusy');
   }
 
+  if (code === 'rate_limited') {
+    return i18n.t('addTransaction.aiRateLimited');
+  }
+
+  if (code === 'quota_exhausted') {
+    return i18n.t('addTransaction.aiQuotaExhausted');
+  }
+
+  if (code === 'payload_too_large') {
+    return i18n.t('addTransaction.aiPayloadTooLarge');
+  }
+
+  if (code === 'unsupported_media_type') {
+    return i18n.t('addTransaction.aiUnsupportedMedia');
+  }
+
+  if (code === 'quota_unavailable') {
+    return i18n.t('addTransaction.aiBusy');
+  }
+
   return null;
 }
 

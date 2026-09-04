@@ -22,8 +22,8 @@ The ordering below is a delivery constraint: later feature work must not bypass 
 - [x] Add two-user RLS integration tests.
 - [x] Revoke unnecessary access to security-definer functions.
 - [x] Version-control Edge Function JWT settings.
-- Add per-user AI quota, rate limiting and media/request-size limits.
-- Protect and rate-limit finance proxy routes.
+- [x] Add per-user AI quota, rate limiting and media/request-size limits.
+- [x] Protect and rate-limit finance proxy routes.
 
 ## M1 — Mobile alpha stabilization
 

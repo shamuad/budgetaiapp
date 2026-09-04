@@ -1,6 +1,6 @@
 # Budgree Architecture
 
-**Verified against:** `feat/supabase-schema-baseline`, based on `main` at `71176812d7f67db0986a8b4b12edcc6efec7c689`
+**Verified against:** `feat/api-abuse-protection`, based on `main` at `318e52f3cbdf2377b65728af6844d8221eeb8207`
 
 **Verification date:** 2026-09-04
 
@@ -56,9 +56,9 @@ The current implementation fetches the full transaction ledger and calculates ba
 
 ## AI boundary
 
-Text, voice and receipt inputs call the `ask-gemini` Supabase Edge Function. Gemini credentials and prompts live server-side; no Gemini key belongs in the mobile bundle. The function supports transaction parsing, category suggestions and receipt scanning with model fallback and request timeouts.
+Text, voice and receipt inputs call the JWT-protected `ask-gemini` Supabase Edge Function. Gemini credentials and prompts live server-side; no Gemini key belongs in the mobile bundle. The function supports transaction parsing, category suggestions and receipt scanning with model fallback and request timeouts.
 
-Before production, the deployed JWT-verification behavior must be version-controlled and the function needs per-user quotas, rate limiting and explicit media/request-size limits.
+An authenticated database function atomically enforces a short AI burst limit and a monthly allowance per user. The Edge Function also rejects oversized HTTP bodies, text, category/account lists, audio and receipt images before contacting Gemini. Quota counters are not directly readable or writable by API roles.
 
 ## Internationalization and theming
 
@@ -74,15 +74,15 @@ The Next.js workspace currently provides:
 - Yahoo Finance search and quote proxy routes;
 - TanStack Query and Zustand providers.
 
-The visible page is still the Create Next App template. The finance routes currently have no application-level authentication or rate limiting.
+The visible page is still the Create Next App template. Finance routes validate the caller's Supabase access token, consume separate per-user search/quote quotas and reject oversized or malformed query parameters before contacting Yahoo.
 
 ## Testing and delivery
 
-Shared unit tests cover money input/formatting, credit-card billing months and account-card appearance. The root quality gate runs:
+Unit tests cover money input/formatting, credit-card billing months, account-card appearance and finance-route authentication/throttling behavior. The root quality gate runs:
 
 1. web ESLint;
 2. mobile, shared and web TypeScript checks;
-3. shared unit tests;
+3. shared and web unit tests;
 4. the Next.js production build.
 
 Missing production gates include mobile component/integration tests, end-to-end tests, EAS profiles and deployment configuration. Database rebuild and cross-user RLS tests run in CI.

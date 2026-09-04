@@ -50,5 +50,8 @@ jobs:
       - name: Rebuild database from migrations and seed
         run: supabase db reset
 
-      - name: Test schema and RLS isolation
+      - name: Smoke-test Edge Function startup
+        run: curl --fail --silent --show-error --request OPTIONS http://127.0.0.1:54321/functions/v1/ask-gemini --output /dev/null
+
+      - name: Test schema, RLS isolation and request quotas
         run: supabase test db

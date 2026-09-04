@@ -24,6 +24,10 @@ The original Dashboard-created core tables were captured from the hosted project
 
 Owning a transaction row is insufficient by itself. RLS also requires its source account, optional destination account and optional category to belong to the same authenticated user. SECURITY DEFINER provisioning functions are trigger-only and are not executable by API roles.
 
+### 2026-09-04 — Expensive APIs use authenticated database quotas
+
+Gemini and Yahoo Finance requests are tied to a validated Supabase user, never an untrusted IP or client-supplied identity. An atomic database function enforces AI limits of 10 requests/minute and 300/month, finance search limits of 30/minute and 500/day, and quote limits of 60/minute and 1,000/day. AI request bodies are capped at 8 MiB, with decoded receipt images capped at 5 MiB and audio at 2 MiB.
+
 ### 2026-08-26 — Gemini credentials stay server-side
 
 The mobile client invokes a Supabase Edge Function. Gemini secrets and prompts are not shipped in `EXPO_PUBLIC_*` variables or the application bundle.
@@ -43,5 +47,4 @@ Supabase-backed data uses TanStack Query. Zustand is reserved for authentication
 ## Decisions still required
 
 - User-configurable base currency and historical conversion behavior
-- Authentication and throttling strategy for public web finance routes
 - Privacy/retention policy for AI-submitted voice and receipt data
