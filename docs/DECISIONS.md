@@ -16,6 +16,14 @@ Dependencies are installed from the repository root. Workspace-specific lockfile
 
 Lint, workspace typechecks, shared unit tests and the web production build run through `npm run verify` locally and in GitHub Actions.
 
+### 2026-09-04 — Hosted metadata is the Supabase baseline
+
+The original Dashboard-created core tables were captured from the hosted project's schema metadata without copying production rows. Historical SQL files now have unique chronological versions; fresh databases rebuild from the baseline plus incremental migrations and deterministic local seed data.
+
+### 2026-09-04 — Tenant ownership includes relationships
+
+Owning a transaction row is insufficient by itself. RLS also requires its source account, optional destination account and optional category to belong to the same authenticated user. SECURITY DEFINER provisioning functions are trigger-only and are not executable by API roles.
+
 ### 2026-08-26 — Gemini credentials stay server-side
 
 The mobile client invokes a Supabase Edge Function. Gemini secrets and prompts are not shipped in `EXPO_PUBLIC_*` variables or the application bundle.
@@ -34,8 +42,6 @@ Supabase-backed data uses TanStack Query. Zustand is reserved for authentication
 
 ## Decisions still required
 
-- Canonical baseline strategy for the existing hosted Supabase project
 - User-configurable base currency and historical conversion behavior
 - Authentication and throttling strategy for public web finance routes
 - Privacy/retention policy for AI-submitted voice and receipt data
-

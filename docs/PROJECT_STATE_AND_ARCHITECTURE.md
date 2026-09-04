@@ -1,6 +1,6 @@
 # Budgree Architecture
 
-**Verified against:** `main` at `bb0ad29851d29b7721f9d1888c7cecafbdc176b2`
+**Verified against:** `feat/supabase-schema-baseline`, based on `main` at `71176812d7f67db0986a8b4b12edcc6efec7c689`
 
 **Verification date:** 2026-09-04
 
@@ -39,9 +39,9 @@ The authenticated tabs are Dashboard, Analytics and Transactions. Transaction cr
 
 Supabase Auth supports email/password sign-up, sign-in, sign-out, session restoration, password recovery and protected routes. Sessions are persisted in React Native AsyncStorage.
 
-The `transactions`, `assets` and `categories` migrations add `user_id` ownership and RLS policies for select, insert, update and delete. Profiles also use owner-scoped RLS. TanStack Query cache is cleared whenever the authenticated user changes so one account cannot see another account's cached data.
+The `transactions`, `assets` and `categories` migrations add `user_id` ownership and authenticated-role RLS policies for select, insert, update and delete. Transaction writes also prove that source account, destination account and category belong to the same authenticated user. Profiles use owner-scoped RLS. TanStack Query cache is cleared whenever the authenticated user changes so one account cannot see another account's cached data.
 
-Security boundary: the repository contains incremental migrations but not the original DDL for the core tables. A clean database cannot yet be reproduced from this repository alone. RLS behavior also lacks automated cross-user integration tests.
+The hosted core DDL was captured from `information_schema`/`pg_catalog` metadata as the first migration. Every migration now has a unique chronological version, a deterministic non-personal seed is tracked, and CI rebuilds a fresh local Supabase database before running two-user RLS tests.
 
 ## State and data access
 
@@ -85,4 +85,4 @@ Shared unit tests cover money input/formatting, credit-card billing months and a
 3. shared unit tests;
 4. the Next.js production build.
 
-Missing production gates include Supabase migration tests, cross-user RLS tests, mobile component/integration tests, end-to-end tests, EAS profiles and deployment configuration.
+Missing production gates include mobile component/integration tests, end-to-end tests, EAS profiles and deployment configuration. Database rebuild and cross-user RLS tests run in CI.

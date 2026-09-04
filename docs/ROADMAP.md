@@ -13,15 +13,15 @@ The ordering below is a delivery constraint: later feature work must not bypass 
 
 ### M0.2 Reproducible Supabase
 
-- Capture the hosted core schema as a reviewed baseline migration.
-- Prove that a new local/preview database can be created from migrations alone.
-- Add deterministic development seed data that contains no personal information.
+- [x] Capture the hosted core schema as a reviewed baseline migration.
+- [x] Prove in CI that a new local/preview database can be created from migrations alone.
+- [x] Add deterministic development seed data that contains no personal information.
 
 ### M0.3 Security hardening
 
-- Add two-user RLS integration tests.
-- Revoke unnecessary access to security-definer functions.
-- Version-control Edge Function JWT settings.
+- [x] Add two-user RLS integration tests.
+- [x] Revoke unnecessary access to security-definer functions.
+- [x] Version-control Edge Function JWT settings.
 - Add per-user AI quota, rate limiting and media/request-size limits.
 - Protect and rate-limit finance proxy routes.
 

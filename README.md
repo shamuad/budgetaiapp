@@ -6,7 +6,7 @@ Budgree is a personal-finance product built as an npm-workspaces monorepo. The m
 
 The mobile application is an authenticated alpha. It includes account, category and transaction management; transfers and investment holdings; installments and credit-card billing periods; analytics; light/dark/automatic themes; and Gemini-assisted text, voice and receipt entry.
 
-It is not production-ready yet. The hosted Supabase base schema must be captured in a reproducible baseline migration, and RLS/Edge Function security still needs automated integration coverage. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
+It is not production-ready yet. The database can be rebuilt from versioned migrations and its tenant isolation is covered by two-user RLS tests, but AI quotas, public finance-route protection and release/privacy operations still need hardening. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
 
 ## Workspaces
 
@@ -22,6 +22,7 @@ Requirements:
 
 - Node.js 22
 - npm
+- Docker Desktop or another Docker-compatible container runtime for local Supabase
 - iOS Simulator/Xcode or Android development tooling for native runs
 
 Install dependencies from the repository root:
@@ -49,10 +50,18 @@ npm run verify
 
 This runs web linting, TypeScript checks for all workspaces, shared unit tests and the web production build.
 
+Rebuild and test the local database:
+
+```sh
+npm run db:start
+npm run verify:db
+```
+
+`verify:db` applies every migration to a clean database, loads deterministic development data and runs the schema/RLS pgTAP suites. It never connects to the hosted project.
+
 ## Documentation
 
 - [Architecture](docs/PROJECT_STATE_AND_ARCHITECTURE.md)
 - [Current Status](docs/CURRENT_STATUS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Decisions](docs/DECISIONS.md)
-
