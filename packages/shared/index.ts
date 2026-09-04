@@ -2,6 +2,7 @@ export { default as i18n } from './i18n';
 export { getSupabase } from './lib/supabase';
 export * from './lib/authLinks';
 export * from './lib/authSession';
+export * from './lib/aiResponse';
 export * from './config/apiConfig';
 export * from './lib/api/assets';
 export * from './lib/api/avatar';

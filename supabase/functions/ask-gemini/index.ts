@@ -36,6 +36,7 @@ import {
 // The lite model transcribes audio noticeably worse, so it stays the fallback and
 // is only reached once the primary has failed.
 const MODELS = ['gemini-3-flash-preview', 'gemini-flash-lite-latest'];
+const GOOGLE_GEMINI_API_ROOT = 'https://generativelanguage.googleapis.com/v1beta';
 
 // Sampling defaults to temperature 1, which returns a different transcription for
 // byte-identical audio. Extraction is not a creative task, so sampling is switched off.
@@ -98,6 +99,36 @@ const AUDIO_MIME_TYPES = new Set([
   'audio/webm',
   'audio/ogg',
 ]);
+
+/**
+ * CI supplies a deterministic Gemini-compatible upstream on the Docker host.
+ * The override is accepted only by the local Supabase topology; a hosted
+ * project always talks directly to Google's API even if a stray secret exists.
+ */
+function resolveGeminiApiRoot() {
+  const override = Deno.env.get('GEMINI_API_BASE_URL')?.trim();
+
+  if (!override) {
+    return GOOGLE_GEMINI_API_ROOT;
+  }
+
+  try {
+    const supabaseHost = new URL(Deno.env.get('SUPABASE_URL') ?? '').hostname;
+    const overrideUrl = new URL(override);
+    const isLocalSupabase = ['kong', 'localhost', '127.0.0.1', 'host.docker.internal'].includes(
+      supabaseHost,
+    );
+
+    if (isLocalSupabase && ['http:', 'https:'].includes(overrideUrl.protocol)) {
+      return override.replace(/\/+$/, '');
+    }
+  } catch {
+    // Invalid or incomplete local configuration falls back to Google below.
+  }
+
+  console.error('ask-gemini: ignored GEMINI_API_BASE_URL outside local Supabase');
+  return GOOGLE_GEMINI_API_ROOT;
+}
 
 type InlinePart = { inlineData: { mimeType: string; data: string } };
 
@@ -609,6 +640,7 @@ Deno.serve(async (request) => {
     }
 
     const quotaHeaders = quotaResult;
+    const geminiApiRoot = resolveGeminiApiRoot();
 
     console.log(`ask-gemini: action=${asString(body.action) || 'legacy_parts'}`);
 
@@ -621,7 +653,7 @@ Deno.serve(async (request) => {
 
       try {
         response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          `${geminiApiRoot}/models/${model}:generateContent`,
           {
             method: 'POST',
             headers: {
