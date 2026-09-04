@@ -80,11 +80,11 @@ The visible page is still the Create Next App template. Finance routes validate 
 
 ## Testing and delivery
 
-Unit tests cover money input/formatting, credit-card billing months, account-card appearance and finance-route authentication/throttling behavior. The root quality gate runs:
+Unit tests cover auth-session cache safety, money input/formatting, credit-card billing months, account-card appearance and finance-route authentication/throttling behavior. The root quality gate runs:
 
 1. web ESLint;
 2. mobile, shared and web TypeScript checks;
 3. shared and web unit tests;
 4. the Next.js production build.
 
-Missing production gates include mobile component/integration tests, end-to-end tests, EAS profiles and deployment configuration. Database rebuild and cross-user RLS tests run in CI.
+CI also exercises sign-up, login, logout, password replacement and direct user switching against a freshly rebuilt local Supabase database, then runs the cross-user RLS suites. Missing production gates include broader mobile component coverage, transaction/AI end-to-end tests, EAS profiles and deployment configuration.

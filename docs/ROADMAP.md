@@ -27,7 +27,9 @@ The ordering below is a delivery constraint: later feature work must not bypass 
 
 ## M1 — Mobile alpha stabilization
 
-- Test auth recovery, user switching, receipt, voice, transfers, investments, installments and credit-card cycles end to end.
+- [x] Test sign-up, login, logout, password recovery and user switching against local Supabase.
+- Test receipt and voice AI entry end to end.
+- Test transfers, investments, installments and credit-card cycles end to end.
 - Add mobile error monitoring and privacy-safe diagnostics.
 - Add account deletion/export and privacy disclosures.
 - Configure EAS development, preview and production profiles.
