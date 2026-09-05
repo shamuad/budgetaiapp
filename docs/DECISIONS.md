@@ -1,8 +1,32 @@
-# Technical Decisions
+# Decisions
 
-This is a lightweight decision log. Add a dated entry when a decision changes architecture, security, data semantics or delivery order.
+This is the durable decision log for product, design, architecture, security, data semantics and delivery order. Add a dated entry when one of those changes. Exploration and uncommitted ideas belong in `BACKLOG.md`.
 
 ## Active decisions
+
+### 2026-09-05 — Source-of-truth hierarchy
+
+GitHub `shamuad/budgetaiapp` is authoritative for code and project documentation. The approved Budgree Figma file is authoritative for visual design. The Main Coordination Room controls sequencing and reconciliation but does not replace either source. Conversation history is context, not durable proof.
+
+### 2026-09-05 — One active task and governed workstreams
+
+Mobile App Development, Web App Development, Backend/Data/Security, Product Design, Website & Marketing, Brand & Assets and QA & Release remain separate, connected workstreams. `CURRENT_STATUS.md` names one active project task; new ideas enter `BACKLOG.md` until the coordination room assigns a milestone and acceptance criteria.
+
+### 2026-09-05 — Topic branch, checks, PR and user approval are mandatory
+
+New work starts from the latest `main`, stays scoped to one topic branch, passes relevant checks, enters a PR and is merged only after explicit user approval. CI success is not itself product or design approval. Squash merge is preferred for one-outcome changes.
+
+### 2026-09-05 — Product Design advances through explicit gates
+
+D0 Figma structure and D1 Visual Direction are complete. D2 Color System is next. Later stages do not start until the current stage is explicitly approved. Because the product owner is not a designer, instructions must use exact beginner-sized Figma steps and checkpoints.
+
+### 2026-09-05 — Visual direction and color roles
+
+The approved direction is premium adaptive fintech with clear hierarchy, polished card structures, restrained glass surfaces, soft corners and clean typography across Light, Dark and Auto. Color roles are distinct: structural `brand`, Budgree/AI accent, and financial income/expense semantics. They must not be consolidated merely because two roles may use green.
+
+### 2026-09-05 — Ideas do not bypass milestones
+
+Notifications, biometrics, recurring bills, bank connections and other new ideas are captured and evaluated in the backlog. They are not implemented opportunistically while another task is active.
 
 ### 2026-09-04 — GitHub code is the implementation source of truth
 
@@ -14,11 +38,11 @@ Dependencies are installed from the repository root. Workspace-specific lockfile
 
 ### 2026-09-04 — Quality gate before merge
 
-Lint, workspace typechecks, shared unit tests and the web production build run through `npm run verify` locally and in GitHub Actions.
+Lint, workspace typechecks, shared unit tests and the web production build run through `npm run verify` locally and in GitHub Actions. Relevant local-Supabase integration and database suites are additional gates for affected work.
 
 ### 2026-09-04 — Hosted metadata is the Supabase baseline
 
-The original Dashboard-created core tables were captured from the hosted project's schema metadata without copying production rows. Historical SQL files now have unique chronological versions; fresh databases rebuild from the baseline plus incremental migrations and deterministic local seed data.
+The original Dashboard-created core tables were captured from the hosted project's schema metadata without copying production rows. Historical SQL files have unique chronological versions; fresh databases rebuild from the baseline plus incremental migrations and deterministic local seed data.
 
 ### 2026-09-04 — Tenant ownership includes relationships
 
@@ -46,5 +70,7 @@ Supabase-backed data uses TanStack Query. Zustand is reserved for authentication
 
 ## Decisions still required
 
-- User-configurable base currency and historical conversion behavior
-- Privacy/retention policy for AI-submitted voice and receipt data
+- User-configurable base currency and historical conversion behavior.
+- Privacy/retention policy for AI-submitted voice and receipt data.
+- Notification product/privacy policy before notifications are promoted from backlog.
+- Repository branch-protection/ruleset configuration.

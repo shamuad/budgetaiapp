@@ -4,9 +4,18 @@ Budgree is a personal-finance product built as an npm-workspaces monorepo. The m
 
 ## Current status
 
-The mobile application is an authenticated alpha. It includes account, category and transaction management; transfers and investment holdings; installments and credit-card billing periods; analytics; light/dark/automatic themes; and Gemini-assisted text, voice and receipt entry.
+The mobile application is an authenticated alpha. It includes account, category and transaction management; transfers and investment holdings; installments and credit-card billing periods; analytics; Light/Dark/Auto themes; and Gemini-assisted text, push-to-talk voice and receipt entry.
 
-It is not production-ready yet. The database can be rebuilt from versioned migrations, tenant isolation is covered by two-user RLS tests, and AI/finance entry points have authenticated per-user limits. Release hosting/configuration and privacy operations remain incomplete. See [Current Status](docs/CURRENT_STATUS.md) and [Roadmap](docs/ROADMAP.md).
+It is not production-ready yet. The database can be rebuilt from versioned migrations, tenant isolation is covered by two-user RLS tests, and AI/finance entry points have authenticated per-user limits. Native device validation, release configuration, privacy operations and diagnostics remain incomplete. See [Current Status](docs/CURRENT_STATUS.md) and [Master Roadmap](docs/ROADMAP.md).
+
+## Source of truth and delivery
+
+- GitHub is authoritative for code and project documentation.
+- The approved Budgree Figma file is authoritative for visual design.
+- One active task moves through the appropriate workstream.
+- Changes follow latest `main` -> topic branch -> validation -> PR -> user approval -> merge.
+
+See [Product](docs/PRODUCT.md), [Workstreams](docs/WORKSTREAMS.md), [Backlog](docs/BACKLOG.md) and [Contributing](CONTRIBUTING.md).
 
 ## Workspaces
 
@@ -42,7 +51,7 @@ npm run dev --workspace=web
 
 ## Quality checks
 
-Run the same quality gate used by CI:
+Run the same core quality gate used by CI:
 
 ```sh
 npm run verify
@@ -57,11 +66,16 @@ npm run db:start
 npm run verify:db
 ```
 
-`verify:db` applies every migration to a clean database, loads deterministic development data and runs the schema/RLS pgTAP suites. It never connects to the hosted project.
+`verify:db` applies every migration to a clean database, loads deterministic development data and runs the schema/RLS pgTAP suites. It never connects to the hosted project. CI additionally runs the auth, AI-media and financial integration scripts against local Supabase.
 
 ## Documentation
 
-- [Architecture](docs/PROJECT_STATE_AND_ARCHITECTURE.md)
+- [Product](docs/PRODUCT.md)
 - [Current Status](docs/CURRENT_STATUS.md)
-- [Roadmap](docs/ROADMAP.md)
+- [Master Roadmap](docs/ROADMAP.md)
+- [Backlog](docs/BACKLOG.md)
+- [Workstreams and Rooms](docs/WORKSTREAMS.md)
+- [Architecture](docs/PROJECT_STATE_AND_ARCHITECTURE.md)
 - [Decisions](docs/DECISIONS.md)
+- [Financial Test Coverage](docs/FINANCIAL_TESTS.md)
+- [Contributing](CONTRIBUTING.md)

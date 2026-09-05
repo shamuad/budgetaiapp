@@ -1,8 +1,7 @@
 # Budgree Architecture
 
-**Verified against:** `main` at `d349cf1b21acebcf438afe4c9f50688e5cdade41`
-
-**Verification date:** 2026-09-04
+**Verified against:** `main` at `2bb6f4d9e2b3fb6e1202e89c4c667b3fe2177c65`  
+**Verification date:** 2026-09-05
 
 This document describes code that exists in the repository. Planned work belongs in `ROADMAP.md`; current blockers and validation results belong in `CURRENT_STATUS.md`.
 
@@ -41,9 +40,9 @@ Supabase Auth supports email/password sign-up, sign-in, sign-out, session restor
 
 The `transactions`, `assets` and `categories` migrations add `user_id` ownership and authenticated-role RLS policies for select, insert, update and delete. Transaction writes also prove that source account, destination account and category belong to the same authenticated user. Profiles use owner-scoped RLS. TanStack Query cache is cleared whenever the authenticated user changes so one account cannot see another account's cached data.
 
-The hosted core DDL was captured from `information_schema`/`pg_catalog` metadata as the first migration. Every migration now has a unique chronological version, a deterministic non-personal seed is tracked, and CI rebuilds a fresh local Supabase database before running two-user RLS tests.
+The hosted core DDL was captured from metadata as the first migration. Every migration has a unique chronological version, a deterministic non-personal seed is tracked, and CI rebuilds a fresh local Supabase database before running two-user RLS tests.
 
-## State and data access
+## State, data access and financial semantics
 
 - TanStack Query owns remote/server state and mutation invalidation.
 - Zustand owns authentication projection, theme preference and small client-only UI state.
@@ -51,6 +50,8 @@ The hosted core DDL was captured from `information_schema`/`pg_catalog` metadata
 - Query keys are shared centrally.
 - Transactions retain the original currency and a fixed exchange rate into the current EUR base currency.
 - Transfers move value between a source and destination account without becoming income or expense.
+- Installment plans allocate integer cents so their rows reproduce the original total.
+- Credit-card transactions retain statement-month snapshots.
 
 The current implementation fetches the full transaction ledger and calculates balances in the client. Pagination and server-side aggregates are future scaling work.
 
@@ -60,13 +61,15 @@ Text, voice and receipt inputs call the JWT-protected `ask-gemini` Supabase Edge
 
 An authenticated database function atomically enforces a short AI burst limit and a monthly allowance per user. The Edge Function also rejects oversized HTTP bodies, text, category/account lists, audio and receipt images before contacting Gemini. Quota counters are not directly readable or writable by API roles.
 
-The hosted database migration history is aligned with the repository, both security migrations are deployed, and hosted `ask-gemini` version 11 runs with JWT verification enabled.
+The hosted database migration history was aligned with the repository through the recorded security rollout, and the hosted `ask-gemini` function runs with JWT verification enabled.
 
 ## Internationalization and theming
 
 The shared i18n package includes English, Turkish, Dutch and Spanish with English fallback. UI language currently follows the device language. Number formatting also considers the device region.
 
-Mobile supports light, dark and automatic appearance through semantic color tokens. Theme preference is persisted with Zustand and AsyncStorage. The web workspace has not yet adopted the mobile product design system.
+Mobile supports Light, Dark and Auto appearance through semantic color tokens. New colors belong in both palettes. Structural brand, Budgree/AI accent and financial-direction colors are separate semantic roles. The legacy `src/theme.ts` color palette remains during migration, while spacing, radius and the 44pt touch target still come from that module.
+
+Figma is authoritative for approved visual values. The web workspace has not yet adopted the mobile product design system.
 
 ## Web boundary
 
@@ -76,15 +79,23 @@ The Next.js workspace currently provides:
 - Yahoo Finance search and quote proxy routes;
 - TanStack Query and Zustand providers.
 
-The visible page is still the Create Next App template. Finance routes validate the caller's Supabase access token, consume separate per-user search/quote quotas and reject oversized or malformed query parameters before contacting Yahoo.
+The visible page remains the Create Next App template. Finance routes validate the caller's Supabase access token, consume separate per-user search/quote quotas and reject oversized or malformed query parameters before contacting Yahoo.
 
 ## Testing and delivery
 
-Unit tests cover AI media response mapping, auth-session cache safety, money input/formatting, credit-card billing months, account-card appearance and finance-route authentication/throttling behavior. The root quality gate runs:
+The root quality gate runs:
 
 1. web ESLint;
 2. mobile, shared and web TypeScript checks;
 3. shared and web unit tests;
 4. the Next.js production build.
 
-CI also exercises sign-up, login, logout, password replacement and direct user switching against a freshly rebuilt local Supabase database. A second hermetic scenario sends authenticated audio and receipt-image payloads through the real local Edge Function and quota layer to a deterministic Gemini-compatible fixture, then maps the replies into mobile form values. The production Google endpoint cannot be overridden by this local-only mechanism. Missing production gates include physical-device camera/microphone and live-model validation, broader mobile component coverage, financial transaction end-to-end tests, EAS profiles and deployment configuration.
+The database CI job starts a fresh local Supabase environment and exercises:
+
+- schema rebuild and deterministic seed;
+- sign-up, login, logout, password replacement and user switching;
+- authenticated audio and receipt-image payloads through the real local Edge Function and quota layer to a deterministic Gemini-compatible fixture;
+- financial transfer, investment, currency, installment and credit-card-cycle behavior through shared calculations and authenticated local-Supabase API operations;
+- pgTAP schema, two-user RLS and request-quota suites.
+
+This coverage does not replace physical-device native-screen testing. Remaining technical release gates include live-model camera/microphone checks on iOS and Android, native financial-flow regression, privacy-safe diagnostics, privacy operations, EAS profiles and production deployment configuration.
