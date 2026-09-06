@@ -1233,7 +1233,6 @@ export default function AddTransactionModal({
               options={transactionTypeOptions()}
               value={type}
               onChange={handleChangeType}
-              activeColor={typeAccent}
             />
 
             <View style={styles.card}>

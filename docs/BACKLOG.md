@@ -15,6 +15,8 @@ This file is the intake queue for work that is not currently active. `ROADMAP.md
 
 | Item | Status | Value | Dependencies | Milestone candidate |
 |---|---|---|---|---|
+| AI Assistant conversation experience | Parked | Explain finances and support guided actions | Scope, permissions, quotas, data access and confirmation rules; bottom-navigation icon is a design placeholder only | Post-stabilization |
+| Conditional family-sharing member strip | Parked | Make shared household context visible | Sharing data model, member roles, consent and privacy boundaries; only show after a sharing group exists | Post-stabilization |
 | Opt-in push notifications with granular preferences for bills, recurring payments, budget thresholds, unusual changes and important account/security events | Candidate | Timely action without opening the app | Notification product rules, privacy defaults, physical-device testing, backend scheduling | Post-beta |
 | Biometric app unlock using iOS LocalAuthentication and Android BiometricPrompt through an Expo-compatible approach | Candidate | Better local privacy and faster return access | Threat model, fallback PIN/session behavior, device testing | Beta or post-beta |
 | Recurring bills and subscriptions | Candidate | Forward visibility and fewer missed payments | Recurrence domain model, notifications policy | Post-beta |
@@ -47,7 +49,7 @@ This file is the intake queue for work that is not currently active. `ROADMAP.md
 | Empty, loading, error and offline states | Candidate | Complete real-world UX | D5 component patterns | Mobile beta |
 | Notification preference and privacy UX | Parked | User control over alerts | Notification milestone committed | Post-beta |
 
-D2 Color System is deliberately not a backlog item: it is the next committed Product Design milestone in `ROADMAP.md`.
+D2 Light / Dark B direction is accepted; implementation and remaining design-system work are tracked in `ROADMAP.md` and `MOBILE_DESIGN_HANDOFF.md`.
 
 ## Web app, website and marketing
 

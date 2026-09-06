@@ -1,22 +1,23 @@
 # Current Status
 
-**Product stage:** authenticated mobile alpha  
-**Verified code snapshot:** `main` at `2bb6f4d9e2b3fb6e1202e89c4c667b3fe2177c65`  
-**Verification date:** 2026-09-05  
-**Main CI at snapshot:** successful  
-**Open issues / PRs before the operating-system documentation branch:** none
+**Product stage:** authenticated mobile alpha
+**Verified main snapshot:** `05d7f66feba7806cef0ebe1717d75bb6d789b87e` (PR #7 merged)
+**Main checked:** 2026-09-07
+**Post-merge CI:** both jobs successful, as confirmed by the product owner
+**Delivery branch:** `design/mobile-foundation` (not merged)
 
 ## Single active task
 
-**Task:** Review and approve the master operating-system documentation on `docs/master-operating-system`.  
-**Room:** Main Coordination.  
-**Done when:** the PR is approved by the user, merged to `main`, post-merge CI is green and this status is confirmed against the merge commit.
+**Task:** Finish category design references and begin incremental mobile implementation from the approved Light / Dark B direction.
+**Authorization:** product owner in the Product Design task, 2026-09-06, resumed 2026-09-07.
+**Scope of this delivery:** category list presentation, shared filled selection controls, D2 semantic colors and durable handoff. Existing category mutations, account ordering and financial calculations remain in place.
+**Done when:** relevant checks pass, native visual/interaction review is recorded, and the user approves the PR before merge.
 
-No other task is active while this gate is open.
+## Immediate next step
 
-## Queued next delivery task
+Use the existing local project's environment configuration to open the authenticated app and review this first slice on the simulator/device. The new checkout has no Supabase environment configuration; bundle export alone does not prove authenticated runtime behavior. Then continue existing account/editor and Dashboard views in small reviewed slices, using the inventory in [Mobile design handoff](MOBILE_DESIGN_HANDOFF.md).
 
-**D2 — Color System** in the **Product Design** room. It starts only after the active documentation gate closes. D2 must be guided as beginner-sized Figma steps and ends with explicit approval of Light/Dark color styles and semantic roles.
+The previous master-documentation gate closed with PR #7. Its old D2-only queue was stale. D2's Light / Dark B direction was accepted in the design conversation; remaining screen polish is iterative, not a reason to redesign the whole app before coding.
 
 ## Reconciled baseline
 
@@ -33,8 +34,8 @@ No other task is active while this gate is open.
 - Server-side Gemini text, push-to-talk voice, categorization and receipt/Vision flows.
 - Authenticated per-user quotas and input limits for Gemini and finance proxy routes.
 - Local integration coverage for auth lifecycle, deterministic AI media flow and financial lifecycle.
-- `npm run verify` and both CI jobs pass at `2bb6f4d`.
-- PRs #1 through #6 were merged to `main`.
+- The earlier baseline passed both CI jobs at `2bb6f4d`; PR #7 added the operating-system documentation.
+- PRs #1 through #7 were merged to `main`.
 
 ### Confirmed project/design state
 
@@ -42,7 +43,7 @@ These are project records supplied by the product owner; Figma remains authorita
 
 - D0 Figma file structure is complete.
 - D1 Visual Direction is complete.
-- D2 Color System is the next design stage.
+- D2 Light and Dark B is the accepted palette; category references have been revised against existing code.
 - Approved direction is premium adaptive fintech: clear hierarchy, polished card structures, restrained glass surfaces and clean typography.
 - Brand/UI color roles remain distinct: structural `brand`, Budgree/AI accent and financial income/expense semantics.
 
@@ -51,12 +52,12 @@ These are project records supplied by the product owner; Figma remains authorita
 - Earlier history said auth and RLS were absent; GitHub now proves they are implemented and tested.
 - Earlier history described financial lifecycle validation as open; PR #6 added shared calculation and local-Supabase integration coverage.
 - Native-screen financial regression and physical-device voice/receipt checks remain open; API/integration coverage does not prove them.
-- The previous status and architecture documents referenced `d349cf1`; the verified baseline is now `2bb6f4d`.
+- The previous status stopped at `2bb6f4d`; verified main is now `05d7f66`. This branch records the subsequent design and implementation handoff.
 - GitHub has no repository ruleset enforcing branch protection. The documented PR and user-approval process is therefore a required human control until protection is configured.
 
 ## Verification evidence
 
-- Root quality gate: CI success at `2bb6f4d`.
+- Local first-slice verification: lint, all workspace typechecks, 53 unit tests and web production build passed on 2026-09-07. iOS Metro/Hermes bundle export passed; this is not a native visual acceptance test.
 - Database CI: clean migration rebuild; auth, AI-media and financial integration scripts; schema, RLS and quota pgTAP tests.
 - Hosted security record: hosted migration history aligned through the recorded security baseline; `ask-gemini` JWT enforcement and unauthenticated rejection were previously smoke-tested.
 

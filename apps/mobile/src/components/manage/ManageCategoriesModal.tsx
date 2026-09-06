@@ -328,24 +328,22 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
                       <Text style={styles.sectionHeaderText}>{section.title}</Text>
                     </View>
                   )}
-                  renderItem={({ item: category, index, section }) => {
-                    const edgeStyle = [
-                      styles.row,
-                      index === 0 && styles.rowFirst,
-                      index === section.data.length - 1 && styles.rowLast,
-                      index > 0 && styles.rowDivided,
-                    ];
+                  renderItem={({ item: category, section }) => {
+                    const iconTone = section.tone ?? (category.type === 'income' ? colors.income : colors.textMuted);
 
                     if (section.kind === 'inactive') {
                       return (
-                        <View key={category.id} style={edgeStyle}>
-                          <Text style={[styles.rowIcon, styles.rowIconInactive]}>{category.icon}</Text>
+                        <View key={category.id} style={styles.row}>
+                          <View style={[styles.iconWell, styles.iconWellInactive]}>
+                            <Text style={styles.rowIcon}>{category.icon}</Text>
+                          </View>
                           <View style={styles.rowText}>
                             <Text style={styles.rowNameInactive} numberOfLines={1}>
                               {resolveCategoryName(category)}
                             </Text>
                           </View>
                           <TouchableOpacity
+                            accessibilityRole="button"
                             activeOpacity={0.7}
                             onPress={() => handleRestore(category)}
                             style={styles.restoreButton}>
@@ -358,10 +356,13 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
 
                     return (
                       <TouchableOpacity
+                        accessibilityRole="button"
                         activeOpacity={0.6}
                         onPress={() => setTarget(category)}
-                        style={edgeStyle}>
-                        <Text style={styles.rowIcon}>{category.icon}</Text>
+                        style={styles.row}>
+                        <View style={[styles.iconWell, { backgroundColor: `${iconTone}1F` }]}>
+                          <Text style={styles.rowIcon}>{category.icon}</Text>
+                        </View>
                         <View style={styles.rowText}>
                           <View style={styles.rowNameLine}>
                             <Text style={styles.rowName} numberOfLines={1}>
@@ -379,7 +380,7 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
                             {i18n.t('manage.usage', { count: usageCount(category.id) })}
                           </Text>
                         </View>
-                        <ChevronRight color={colors.chevron} size={18} />
+                        <ChevronRight color={colors.textMuted} size={18} />
                       </TouchableOpacity>
                     );
                   }}
@@ -387,6 +388,7 @@ export default function ManageCategoriesModal({ visible, onClose }: ManageCatego
 
                 <View style={styles.footer}>
                   <TouchableOpacity
+                    accessibilityRole="button"
                     activeOpacity={0.8}
                     onPress={() => setTarget(NEW_CATEGORY)}
                     style={styles.addButton}>
@@ -416,10 +418,8 @@ function createStyles(colors: ColorTokens) {
       flexDirection: 'row',
       alignItems: 'center',
       minHeight: 56,
-      paddingHorizontal: spacing.lg,
-      backgroundColor: colors.surface,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      paddingHorizontal: spacing.xl,
+      backgroundColor: colors.background,
     },
     headerSide: {
       flex: 1,
@@ -427,16 +427,16 @@ function createStyles(colors: ColorTokens) {
       justifyContent: 'center',
     },
     headerTitle: {
-      fontSize: 17,
+      fontSize: 22,
       fontWeight: '600',
       color: colors.text,
     },
     filter: {
-      margin: spacing.lg,
+      margin: spacing.xl,
       marginBottom: 0,
     },
     content: {
-      padding: spacing.lg,
+      padding: spacing.xl,
       paddingTop: spacing.md,
     },
     sectionTitle: {
@@ -477,47 +477,36 @@ function createStyles(colors: ColorTokens) {
       color: colors.textMuted,
       textAlign: 'center',
     },
-    // Each row carries its own edges rather than sitting in a wrapping card
-    // View, since a SectionList renders rows and headers as flat siblings —
-    // `rowFirst`/`rowLast` round and close off the top/bottom of each section
-    // so consecutive rows still read as one card.
+    // Independent soft cards keep each category legible while the list remains virtualized.
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
-      minHeight: TOUCH_TARGET + 12,
+      minHeight: 72,
       paddingHorizontal: spacing.lg,
-      backgroundColor: colors.surfaceElevated,
-      borderLeftWidth: StyleSheet.hairlineWidth,
-      borderRightWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderGlass,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.md,
+      backgroundColor: colors.surface,
+      borderRadius: 14,
     },
-    rowFirst: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
+    iconWell: {
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    rowLast: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomLeftRadius: radius.lg,
-      borderBottomRightRadius: radius.lg,
-    },
-    rowDivided: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
+    iconWellInactive: {
+      backgroundColor: colors.borderGlass,
     },
     rowIcon: {
-      width: 28,
-      fontSize: 20,
-      lineHeight: 24,
+      fontSize: 24,
+      lineHeight: 30,
       textAlign: 'center',
-    },
-    rowIconInactive: {
-      opacity: 0.4,
     },
     rowText: {
       flex: 1,
-      gap: 2,
+      gap: 5,
     },
     rowNameLine: {
       flexDirection: 'row',
@@ -525,7 +514,9 @@ function createStyles(colors: ColorTokens) {
       gap: spacing.xs,
     },
     rowName: {
-      fontSize: 16,
+      flexShrink: 1,
+      fontSize: 15,
+      fontWeight: '600',
       color: colors.text,
     },
     rowNameInactive: {
@@ -533,10 +524,12 @@ function createStyles(colors: ColorTokens) {
       color: colors.textMuted,
     },
     rowSubtitle: {
-      fontSize: 13,
+      fontSize: 12,
       color: colors.textMuted,
     },
     restoreButton: {
+      minHeight: TOUCH_TARGET,
+      justifyContent: 'center',
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
@@ -551,19 +544,18 @@ function createStyles(colors: ColorTokens) {
       color: colors.tint,
     },
     footer: {
-      padding: spacing.lg,
+      padding: spacing.xl,
       paddingTop: spacing.sm,
     },
-    // `brand` rather than `tint`: a saturated indigo reads as a deliberate,
-    // premium call to action in both modes instead of the flatter system blue.
+    // Filled actions keep the same violet/white pairing in both themes.
     addButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: spacing.sm,
-      minHeight: TOUCH_TARGET + 6,
+      minHeight: 52,
       backgroundColor: colors.brand,
-      borderRadius: radius.lg,
+      borderRadius: 14,
       shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.16,

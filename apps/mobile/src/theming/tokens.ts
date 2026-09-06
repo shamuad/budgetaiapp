@@ -1,28 +1,25 @@
 /**
- * Semantic color tokens for the dynamic (dark/light/auto) theme system.
- *
- * `apps/mobile/src/theme.ts` remains the static, light-only palette that the
- * rest of the app already relies on — it is untouched. These tokens are for
- * screens that opt into `useAppTheme()`, starting with the Profile screen.
- * The `light` palette intentionally mirrors `theme.ts` so nothing looks
- * different until a screen migrates.
+ * D2 semantic palette: approved Light and Dark B (Figma Foundations 68:2).
+ * `tint` is readable interactive text; `brand` is the saturated filled action
+ * paired with `onBrand`. Keep account-selected colors and AI roles separate.
+ * Static legacy consumers in theme.ts migrate separately.
  */
 
 export const lightColors = {
-  background: '#F3F4F6',
+  background: '#F6F7FB',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
   surfaceGlass: 'rgba(255, 255, 255, 0.72)',
   border: '#E5E7EB',
   borderGlass: 'rgba(17, 24, 39, 0.08)',
-  text: '#111827',
-  textMuted: '#6B7280',
+  text: '#101425',
+  textMuted: '#697086',
   placeholder: '#9CA3AF',
   placeholderFaint: '#D1D5DB',
   chevron: '#C7C7CC',
-  // iOS system blue, reserved for interactive text and controls.
-  tint: '#007AFF',
-  brand: '#4F46E5',
+  // Interactive text and icons follow the D2 accent.
+  tint: '#5842D8',
+  brand: '#5842D8',
   brandDark: '#312E81',
   brandLight: '#6366F1',
   brandSoft: '#C7D2FE',
@@ -34,9 +31,9 @@ export const lightColors = {
   budgreeSurface: 'rgba(0, 201, 79, 0.10)',
   budgreeBorder: 'rgba(0, 201, 79, 0.28)',
   budgreeGlow: 'rgba(0, 232, 92, 0.30)',
-  income: '#059669',
-  expense: '#DC2626',
-  danger: '#DC2626',
+  income: '#087F5B',
+  expense: '#C72E2E',
+  danger: '#C72E2E',
   dangerText: '#B91C1C',
   dangerSurface: '#FEE2E2',
   // Soft, non-blocking notices (e.g. "this exceeds your recorded balance") —
@@ -46,7 +43,7 @@ export const lightColors = {
   warningSurface: 'rgba(217, 119, 6, 0.12)',
   overlay: 'rgba(17, 24, 39, 0.45)',
   onBrand: '#FFFFFF',
-  // The AI panel: a saturated indigo block in light mode, and a deep glass
+  // Existing AI entry panel: a saturated green block in light mode, and glass
   // surface in dark mode, where a vivid fill would glare against the canvas.
   aiSurface: '#00C94F',
   aiSurfaceStrong: '#00A840',
@@ -56,24 +53,24 @@ export const lightColors = {
   // Warm gold accent, reserved for the premium badge alone.
   premium: '#B45309',
   premiumSurface: '#FEF3C7',
-  shadow: '#111827',
+  shadow: '#101425',
 } as const;
 
 export const darkColors = {
-  background: '#0B0F19',
-  surface: '#151A25',
-  surfaceElevated: '#1C2330',
+  background: '#1B1D22',
+  surface: '#2C2F36',
+  surfaceElevated: '#2C2F36',
   surfaceGlass: 'rgba(255, 255, 255, 0.06)',
-  border: '#252C3B',
+  border: '#454953',
   borderGlass: 'rgba(255, 255, 255, 0.10)',
-  text: '#F5F7FA',
-  textMuted: '#94A3B8',
+  text: '#F5F5F7',
+  textMuted: '#C2BED3',
   placeholder: '#64748B',
   placeholderFaint: '#3B4252',
   chevron: '#4B5563',
-  // iOS system blue, dark-mode tint.
-  tint: '#0A84FF',
-  brand: '#6366F1',
+  // Light violet is reserved for interactive text on dark surfaces.
+  tint: '#B6A7FF',
+  brand: '#5842D8',
   brandDark: '#4338CA',
   brandLight: '#818CF8',
   brandSoft: '#312E81',
@@ -85,9 +82,9 @@ export const darkColors = {
   budgreeSurface: 'rgba(0, 232, 92, 0.12)',
   budgreeBorder: 'rgba(0, 232, 92, 0.32)',
   budgreeGlow: 'rgba(0, 232, 92, 0.45)',
-  income: '#34D399',
-  expense: '#F87171',
-  danger: '#F87171',
+  income: '#64DBAF',
+  expense: '#FF9999',
+  danger: '#FF9999',
   dangerText: '#FCA5A5',
   dangerSurface: 'rgba(248, 113, 113, 0.14)',
   warning: '#FBBF24',
