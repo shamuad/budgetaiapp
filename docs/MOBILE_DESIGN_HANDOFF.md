@@ -50,10 +50,10 @@ Figma's 40-point visual segment was implemented with the existing 44-point touch
 
 - Root lint, all workspace typechecks, 53 existing unit tests and web production build passed locally on 2026-09-07.
 - iOS Metro/Hermes bundle export passed. This is a bundle check, not a signed native build or authenticated-device test.
-- Figma Light and Dark B list renders inspected. Native rendering, tap paths, long translated labels, large text and theme switching still need review with configured Supabase access.
+- Figma Light and Dark B list renders inspected. Native follow-up evidence is recorded below; large-text and broader device coverage remain open.
 - No database, RLS, Edge Function, financial calculation, schema or dependency changes. Existing account appearance tests pass. Database integration suites were not rerun for this presentation-only slice.
 - This machine used Node 26; repository setup/CI targets Node 22. CI remains the clean-environment gate.
-- Fresh checkout has no Supabase environment file. Obtain the owner's existing local project path and reuse the public mobile connection settings without printing or committing secrets. Do not copy production rows into fixtures.
+- The owner supplied the existing local project path. Public mobile connection values were reused in ignored local environment files; values and user data are not committed. No production rows were copied into fixtures.
 
 ## Next acceptance checklist
 
@@ -64,3 +64,14 @@ Figma's 40-point visual segment was implemented with the existing 44-point touch
 5. Continue account/editor and Dashboard migrations as separate bounded deliveries, using the existing behavior inventory. Revisit visual details on the running app.
 
 Rollback: revert the presentation commit through a PR. No data migration is required.
+
+## Native follow-up — 2026-09-07
+
+- Started this branch in the existing iPhone 17 / iOS 26.5 simulator through Expo Go 57. The existing session and account/transaction data loaded successfully.
+- Visually checked the real expense and income category lists, selector switching, and opening/cancelling an existing income category editor. The income editor has no expense budget-group controls.
+- Checked Light → Dark B → Light theme switching. Inspected the Settings filled selector, category card separation, account bank logos and reorder handles. Original Light preference was restored.
+- Found and fixed remaining foreground uses of the filled-action `brand` color: navigation, links, indicators and active control borders now use the readable `tint` role. Filled buttons still use `brand` and white text. Inactive reorder handles use `textMuted` instead of faint placeholder coloring.
+- Account order and financial records were not modified. Presence of reorder handles is verified; actual drag persistence, category save/hide/restore/delete and full financial lifecycle were not exercised against the owner's live data.
+- Mobile preview runs on localhost:8082, with live reload; the owner's existing server on 8081 was preserved. The local Next finance API was configured separately on 127.0.0.1:3000 using the same public Supabase connection; unauthenticated request rejection is checked separately from authenticated market-data behavior.
+- `npm run verify` passed again after the foreground contrast fixes. Initial PR commit CI succeeded; the follow-up commit needs its own CI result.
+- Native screenshots were inspected privately in the simulator, not uploaded with personal finance data. Remaining review: large text, all supported locales, Android/physical devices, persisted CRUD and reorder behavior in disposable test data.

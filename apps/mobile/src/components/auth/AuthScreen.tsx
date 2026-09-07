@@ -385,7 +385,7 @@ function createStyles(colors: ColorTokens) {
     infoText: {
       fontSize: 14,
       fontWeight: '600',
-      color: colors.brand,
+      color: colors.tint,
       textAlign: 'center',
     },
     form: {
@@ -423,7 +423,7 @@ function createStyles(colors: ColorTokens) {
     forgotPasswordText: {
       fontSize: 13,
       fontWeight: '700',
-      color: colors.brand,
+      color: colors.tint,
     },
     submit: {
       minHeight: TOUCH_TARGET + 8,
@@ -480,7 +480,7 @@ function createStyles(colors: ColorTokens) {
     googleGlyph: {
       fontSize: 16,
       fontWeight: '800',
-      color: colors.brand,
+      color: colors.tint,
     },
     socialLabel: {
       fontSize: 15,
@@ -500,7 +500,7 @@ function createStyles(colors: ColorTokens) {
     footerLink: {
       fontSize: 14,
       fontWeight: '700',
-      color: colors.brand,
+      color: colors.tint,
     },
   });
 }

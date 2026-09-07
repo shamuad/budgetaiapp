@@ -4,7 +4,7 @@
 **Verified main snapshot:** `05d7f66feba7806cef0ebe1717d75bb6d789b87e` (PR #7 merged)
 **Main checked:** 2026-09-07
 **Post-merge CI:** both jobs successful, as confirmed by the product owner
-**Delivery branch:** `design/mobile-foundation` (not merged)
+**Delivery branch:** `design/mobile-foundation` — [draft PR #8](https://github.com/shamuad/budgetaiapp/pull/8), not merged
 
 ## Single active task
 
@@ -15,7 +15,7 @@
 
 ## Immediate next step
 
-Use the existing local project's environment configuration to open the authenticated app and review this first slice on the simulator/device. The new checkout has no Supabase environment configuration; bundle export alone does not prove authenticated runtime behavior. Then continue existing account/editor and Dashboard views in small reviewed slices, using the inventory in [Mobile design handoff](MOBILE_DESIGN_HANDOFF.md).
+The configured branch now opens in the iPhone simulator with the existing session. Category lists, income-editor entry/cancel, Light/Dark switching and account reorder-handle visibility were checked without modifying financial data. Review PR #8 and complete remaining native acceptance using disposable test data. Then continue account/editor and Dashboard views in small reviewed slices, using [Mobile design handoff](MOBILE_DESIGN_HANDOFF.md).
 
 The previous master-documentation gate closed with PR #7. Its old D2-only queue was stale. D2's Light / Dark B direction was accepted in the design conversation; remaining screen polish is iterative, not a reason to redesign the whole app before coding.
 

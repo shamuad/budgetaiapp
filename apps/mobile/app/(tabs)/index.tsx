@@ -313,7 +313,7 @@ export default function DashboardScreen() {
                   style={styles.addAccountCard}
                   accessibilityRole="button"
                   accessibilityLabel={i18n.t('manage.addAccount')}>
-                  <Plus color={colors.brand} size={30} strokeWidth={2.5} />
+                  <Plus color={colors.tint} size={30} strokeWidth={2.5} />
                 </TouchableOpacity>
               </ScrollView>
 
@@ -341,12 +341,12 @@ export default function DashboardScreen() {
               style={styles.seeAllRow}
               accessibilityRole="button">
               <Text style={styles.showAllLink}>{i18n.t('dashboard.seeAll')}</Text>
-              <ChevronRight color={colors.brand} size={16} />
+              <ChevronRight color={colors.tint} size={16} />
             </TouchableOpacity>
           </View>
 
           {isLoading ? (
-            <ActivityIndicator size="small" color={colors.brand} />
+            <ActivityIndicator size="small" color={colors.tint} />
           ) : error ? (
             <Text style={styles.error}>{error}</Text>
           ) : recentGroups.length === 0 ? (
@@ -514,7 +514,7 @@ function createStyles(colors: ColorTokens) {
     showAllLink: {
       fontSize: 13,
       fontWeight: '600',
-      color: colors.brand,
+      color: colors.tint,
     },
     // Inline divider above each bucket of the vertical timeline (Today,
     // Yesterday, This Week, Earlier) — subtle and clean, never rendered for

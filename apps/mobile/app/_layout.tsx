@@ -39,7 +39,7 @@ function RootStack() {
       ...base,
       colors: {
         ...base.colors,
-        primary: colors.brand,
+        primary: colors.tint,
         background: colors.background,
         card: colors.surface,
         text: colors.text,
@@ -61,7 +61,7 @@ function RootStack() {
               justifyContent: 'center',
               backgroundColor: colors.background,
             }}>
-            <ActivityIndicator size="large" color={colors.brand} />
+            <ActivityIndicator size="large" color={colors.tint} />
           </View>
         ) : (
           <Stack
