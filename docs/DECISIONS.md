@@ -84,6 +84,10 @@ Dark B uses background `#1B1D22`, surface `#2C2F36` and border `#454953`. Readab
 
 Family sharing and a full AI Assistant are parked. The approved Assistant navigation icon is a visual placeholder, not evidence of an implemented assistant. These ideas do not expand the current implementation slice. Written GitHub records and approved Figma are the handoff; conversations are not assumed to synchronize automatically.
 
+### 2026-09-07 — Management validation and account-editor adaptation
+
+Validate category lifecycle and account-order persistence with disposable local-Supabase users in CI, never by altering the owner's financial records. Keep native gesture/confirmation evidence separate from API persistence tests. Preserve every existing account field even where the Figma reference omits it. Four-choice selectors use two columns to keep labels readable while retaining the shared filled selection style.
+
 ## Decisions still required
 
 - User-configurable base currency and historical conversion behavior.

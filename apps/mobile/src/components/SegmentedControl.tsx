@@ -20,9 +20,10 @@ export default function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const wrapOptions = options.length > 3;
 
   return (
-    <View style={[styles.track, style]}>
+    <View style={[styles.track, wrapOptions && styles.trackWrapped, style]}>
       {options.map((option) => {
         const isActive = option.id === value;
 
@@ -33,10 +34,10 @@ export default function SegmentedControl<T extends string>({
             accessibilityState={{ selected: isActive }}
             activeOpacity={0.7}
             onPress={() => onChange(option.id)}
-            style={[styles.segment, isActive && styles.segmentActive]}>
+            style={[styles.segment, wrapOptions && styles.segmentWrapped, isActive && styles.segmentActive]}>
             <Text
               style={[styles.label, isActive && styles.labelActive]}
-              numberOfLines={1}>
+              numberOfLines={2}>
               {option.label}
             </Text>
           </TouchableOpacity>
@@ -57,6 +58,14 @@ function createStyles(colors: ColorTokens) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderGlass,
     },
+    trackWrapped: {
+      flexWrap: 'wrap',
+    },
+    segmentWrapped: {
+      flex: 0,
+      flexGrow: 1,
+      flexBasis: '47%',
+    },
     segment: {
       flex: 1,
       alignItems: 'center',
@@ -70,6 +79,7 @@ function createStyles(colors: ColorTokens) {
       backgroundColor: colors.brand,
     },
     label: {
+      textAlign: 'center',
       fontSize: 14,
       fontWeight: '600',
       color: colors.textMuted,

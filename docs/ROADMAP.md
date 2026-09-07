@@ -59,6 +59,7 @@ The product owner authorized incremental implementation after the category pass 
 - [x] Verify auth lifecycle against local Supabase.
 - [x] Verify authenticated voice and receipt data through the local Edge Function with a deterministic Gemini fixture.
 - [x] Verify transfers, investments, installments and credit-card cycles through shared calculations and local-Supabase API integration.
+- [x] Verify category lifecycle and account-order persistence using disposable local-Supabase users in CI (PR #8 branch evidence; not yet merged). Native gesture/confirmation acceptance remains separate.
 - [ ] Validate camera/microphone permissions and live Gemini accuracy on physical iOS and Android devices.
 - [ ] Exercise financial lifecycle flows through native mobile screens on physical devices.
 - [ ] Add privacy-safe mobile diagnostics and error monitoring.

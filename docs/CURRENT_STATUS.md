@@ -10,12 +10,12 @@
 
 **Task:** Finish category design references and begin incremental mobile implementation from the approved Light / Dark B direction.
 **Authorization:** product owner in the Product Design task, 2026-09-06, resumed 2026-09-07.
-**Scope of this delivery:** category list presentation, shared filled selection controls, D2 semantic colors and durable handoff. Existing category mutations, account ordering and financial calculations remain in place.
+**Scope of this delivery:** category list presentation, shared filled selection controls, D2 semantic colors, account-editor presentation and isolated management persistence coverage. Existing category mutations, account ordering and financial calculations remain in place.
 **Done when:** relevant checks pass, native visual/interaction review is recorded, and the user approves the PR before merge.
 
 ## Immediate next step
 
-The configured branch now opens in the iPhone simulator with the existing session. Category lists, income-editor entry/cancel, Light/Dark switching and account reorder-handle visibility were checked without modifying financial data. Review PR #8 and complete remaining native acceptance using disposable test data. Then continue account/editor and Dashboard views in small reviewed slices, using [Mobile design handoff](MOBILE_DESIGN_HANDOFF.md).
+The configured branch now opens in the iPhone simulator with the existing session. Category lists, income-editor entry/cancel, Light/Dark switching and account reorder-handle visibility were checked without modifying financial data. Account-editor preview and conditional credit fields were also checked without saving. Isolated category lifecycle/account-order persistence tests passed in GitHub CI. Review PR #8 and complete remaining native gesture/confirmation acceptance using disposable data. Then continue Dashboard and remaining editor views in small reviewed slices, using [Mobile design handoff](MOBILE_DESIGN_HANDOFF.md).
 
 The previous master-documentation gate closed with PR #7. Its old D2-only queue was stale. D2's Light / Dark B direction was accepted in the design conversation; remaining screen polish is iterative, not a reason to redesign the whole app before coding.
 
@@ -61,7 +61,8 @@ These are project records supplied by the product owner; Figma remains authorita
 - Database CI: clean migration rebuild; auth, AI-media and financial integration scripts; schema, RLS and quota pgTAP tests.
 - Hosted security record: hosted migration history aligned through the recorded security baseline; `ask-gemini` JWT enforcement and unauthenticated rejection were previously smoke-tested.
 
-Exact unit-test counts are intentionally omitted because the repeatable CI result, not a manually copied count, is authoritative.
+The repeatable CI result is authoritative; recorded test counts describe this branch snapshot.
+- Management persistence coverage passed in [CI run 34160248572](https://github.com/shamuad/budgetaiapp/actions/runs/34160248572): category hide/restore, custom edit/delete, transaction-reference preservation, account ordering after refetch and cross-user isolation. Both verification and database jobs succeeded at `b7d442f`. Subsequent presentation changes require their own green PR checks.
 
 ## Open alpha blockers
 
