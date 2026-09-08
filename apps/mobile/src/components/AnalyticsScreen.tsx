@@ -1,5 +1,8 @@
 import {
   calculateBudgetBreakdown,
+  selectPeriodTransactions,
+  fromISODate,
+  useAssets,
   DEFAULT_CURRENCY,
   formatCurrency,
   getCategoryColor,
@@ -11,7 +14,7 @@ import {
   type TransactionRow,
 } from '@budgetaiapp/shared';
 import { BarChart3, ChartLine } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
 
@@ -34,7 +37,7 @@ const YEAR_BAR_RADIUS = 4;
 // Android out of the box — the old `UIManager.setLayoutAnimationEnabledExperimental`
 // opt-in is a Legacy-Architecture-only no-op there and just logs a warning.
 
-export default function AnalyticsScreen() {
+export default function AnalyticsScreen({ accountId, dashboardMonth, onClearScope }: { accountId?: string; dashboardMonth?: string; onClearScope?: () => void }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -45,6 +48,12 @@ export default function AnalyticsScreen() {
   const [isYearLineView, setIsYearLineView] = useState(false);
 
   const { transactions } = useTransactionsQuery();
+  const { assets } = useAssets();
+  const scopedAccount = assets.find(asset => asset.id === accountId);
+  useEffect(() => {
+    const requested = dashboardMonth ? fromISODate(dashboardMonth) : null;
+    if (requested) { setAnchorDate(requested); setTimeframe('month'); }
+  }, [dashboardMonth]);
 
   const periodRange = useMemo(() => getPeriodRange(timeframe, anchorDate), [timeframe, anchorDate]);
   const periodLabel = useMemo(() => formatPeriodLabel(timeframe, anchorDate), [timeframe, anchorDate]);
@@ -52,11 +61,8 @@ export default function AnalyticsScreen() {
   const periodTransactions = useMemo(() => {
     const { start, end } = periodRange;
 
-    return transactions.filter((row) => {
-      const date = transactionPeriodDate(row);
-      return date !== null && date >= start && date < end;
-    });
-  }, [transactions, periodRange]);
+    return selectPeriodTransactions(transactions, start, end, accountId);
+  }, [transactions, periodRange, accountId]);
 
   // Spending Breakdown always looks at expenses only, regardless of which
   // chart is showing above it — it answers "where did the money go".
@@ -319,6 +325,12 @@ export default function AnalyticsScreen() {
 
   const listHeader = (
     <View style={styles.header}>
+      {accountId && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Text style={{ flex: 1, color: colors.text, fontSize: 14 }}>{scopedAccount?.name ?? i18n.t('dashboardDesign.all')}</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={onClearScope} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={{ color: colors.tint }}>{i18n.t('dashboardDesign.clear')}</Text>
+        </TouchableOpacity>
+      </View>}
       <SegmentedControl
         options={analyticsTimeframeOptions()}
         value={timeframe}

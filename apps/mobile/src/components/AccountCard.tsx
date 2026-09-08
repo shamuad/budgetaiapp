@@ -1,5 +1,6 @@
 import {
   Asset,
+  i18n,
   DEFAULT_CURRENCY,
   formatCurrency,
   getFaviconUrl,
@@ -23,8 +24,8 @@ import { useAppTheme, type ColorTokens } from '../theming';
 import CardSurface from './CardSurface';
 
 /** Fixed card size — exported so the Dashboard can size the trailing "Add Account" tile to match. */
-export const ACCOUNT_CARD_WIDTH = 200;
-export const ACCOUNT_CARD_HEIGHT = 126;
+export const ACCOUNT_CARD_WIDTH = 166;
+export const ACCOUNT_CARD_HEIGHT = 108;
 
 type AccountCardProps = {
   asset: Asset;
@@ -81,7 +82,7 @@ export default function AccountCard({
   const showFavicon = Boolean(faviconUri) && !faviconFailed;
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: isFocused }}>
       <Animated.View
         style={[
           styles.cardWrap,
@@ -90,7 +91,6 @@ export default function AccountCard({
         ]}>
         <CardSurface appearance={appearance} style={[styles.card, isFocused && styles.cardFocused]}>
           <View style={styles.sheen} />
-          <View style={styles.chip} />
 
           <View style={styles.topRow}>
             <Text style={styles.institution} numberOfLines={1}>
@@ -111,7 +111,7 @@ export default function AccountCard({
           </View>
 
           <View style={styles.bottomRow}>
-            <Text style={styles.label}>Balance</Text>
+            <Text style={styles.label}>{i18n.t('dashboardDesign.balance')}</Text>
             <Text
               style={styles.balance}
               numberOfLines={1}
@@ -131,22 +131,22 @@ function createStyles(colors: ColorTokens) {
     cardWrap: {
       width: ACCOUNT_CARD_WIDTH,
       height: ACCOUNT_CARD_HEIGHT,
-      borderRadius: 18,
+      borderRadius: 20,
       shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 16 },
-      shadowOpacity: 0.34,
-      shadowRadius: 24,
-      elevation: 12,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 2,
     },
     cardWrapFocused: {
-      shadowOpacity: 0.44,
-      shadowRadius: 28,
-      elevation: 16,
+      shadowOpacity: 0.14,
+      shadowRadius: 10,
+      elevation: 3,
     },
     card: {
       flex: 1,
-      borderRadius: 18,
-      padding: spacing.lg,
+      borderRadius: 20,
+      padding: 12,
       justifyContent: 'space-between',
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.10)',
@@ -182,14 +182,14 @@ function createStyles(colors: ColorTokens) {
     },
     institution: {
       flex: 1,
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: '600',
       letterSpacing: 0.2,
       color: colors.onBrand,
     },
     brandMark: {
-      width: 32,
-      height: 32,
+      width: 26,
+      height: 26,
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',

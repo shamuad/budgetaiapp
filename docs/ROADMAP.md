@@ -46,6 +46,7 @@ Figma is authoritative for approved design.
 - [x] D0 — Figma file structure and working conventions.
 - [x] D1 — Visual Direction: premium adaptive fintech, clear hierarchy, polished card structures, restrained glass surfaces and semantic color roles.
 - [x] D2 — Light / Dark B visual palette accepted by the product owner; first semantic token implementation is under review. Distinct interaction, filled action, Budgree/AI and financial roles remain.
+- [x] Approved Dashboard composition implemented on the stacked design branch with real monthly/account-scoped summaries; review and merge remain gated.
 - [ ] D3 — Typography system.
 - [ ] D4 — Spacing, grid, radius, elevation and icon rules.
 - [ ] D5 — Core components and interaction states.

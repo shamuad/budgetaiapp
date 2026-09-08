@@ -4,18 +4,18 @@
 **Verified main snapshot:** `05d7f66feba7806cef0ebe1717d75bb6d789b87e` (PR #7 merged)
 **Main checked:** 2026-09-07
 **Post-merge CI:** both jobs successful, as confirmed by the product owner
-**Delivery branch:** `design/mobile-foundation` — [draft PR #8](https://github.com/shamuad/budgetaiapp/pull/8), not merged
+**Delivery branch:** `design/dashboard`, stacked on `design/mobile-foundation` — [draft PR #8](https://github.com/shamuad/budgetaiapp/pull/8) remains unmerged
 
 ## Single active task
 
-**Task:** Finish category design references and begin incremental mobile implementation from the approved Light / Dark B direction.
-**Authorization:** product owner in the Product Design task, 2026-09-06, resumed 2026-09-07.
-**Scope of this delivery:** category list presentation, shared filled selection controls, D2 semantic colors, account-editor presentation and isolated management persistence coverage. Existing category mutations, account ordering and financial calculations remain in place.
-**Done when:** relevant checks pass, native visual/interaction review is recorded, and the user approves the PR before merge.
+**Task:** Implement the approved Dashboard composition with real monthly and category summaries.
+**Authorization:** product owner in the Product Design task, continued 2026-09-08.
+**Scope of this delivery:** Dashboard masthead/balance card, account carousel, compact monthly income/expense/net, top-two-plus-other spending summary, five-cell navigation with centered New Transaction action, and Dashboard-to-Analytics account/month context. Existing account colors, selection, transaction entry and financial rules remain in place.
+**Done when:** calculations are covered, root verification passes, native Light/Dark and navigation checks are recorded, and the user approves the relevant PR before merge.
 
 ## Immediate next step
 
-The configured branch now opens in the iPhone simulator with the existing session. Category lists, income-editor entry/cancel, Light/Dark switching and account reorder-handle visibility were checked without modifying financial data. Account-editor preview and conditional credit fields were also checked without saving. Isolated category lifecycle/account-order persistence tests passed in GitHub CI. Review PR #8 and complete remaining native gesture/confirmation acceptance using disposable data. Then continue Dashboard and remaining editor views in small reviewed slices, using [Mobile design handoff](MOBILE_DESIGN_HANDOFF.md).
+The approved Dashboard is implemented locally on a stacked branch. Monthly figures use the same statement-month and stored exchange-rate semantics as Analytics; transfers do not count as income or expense. Account selection updates all Dashboard summaries in place, and the Analysis link carries the selected account and month. Root verification passed with 57 tests. Finish the branch handoff and review while keeping PR #8's merge approval separate.
 
 The previous master-documentation gate closed with PR #7. Its old D2-only queue was stale. D2's Light / Dark B direction was accepted in the design conversation; remaining screen polish is iterative, not a reason to redesign the whole app before coding.
 

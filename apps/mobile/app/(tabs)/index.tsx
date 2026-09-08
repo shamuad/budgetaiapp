@@ -6,13 +6,17 @@ import {
   fromISODate,
   i18n,
   TransactionRow,
+  summarizeDashboard,
+  toISODate,
   useAppStore,
   useAssets,
   useTransactions,
 } from '@budgetaiapp/shared';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, ChevronRight, Plus } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,7 +35,10 @@ import AddTransactionModal from '../../src/components/AddTransactionModal';
 import AccountCard, { ACCOUNT_CARD_HEIGHT, ACCOUNT_CARD_WIDTH } from '../../src/components/AccountCard';
 import ManageAccountsModal from '../../src/components/manage/ManageAccountsModal';
 import TransactionItem, { transactionAccount } from '../../src/components/TransactionItem';
-import { getPeriodRange } from '../../src/lib/analyticsPeriod';
+import DashboardSummary from '../../src/components/DashboardSummary';
+import TopHeader from '../../src/components/TopHeader';
+import { useTabActions } from '../../src/components/TabActions';
+import { formatPeriodLabel, getPeriodRange } from '../../src/lib/analyticsPeriod';
 import { spacing } from '../../src/theme';
 import { useAppTheme, type ColorTokens } from '../../src/theming';
 
@@ -97,18 +104,23 @@ function TransactionIcon({
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const { openSettings } = useTabActions();
+  const [anchor, setAnchor] = useState(new Date());
+  useFocusEffect(useCallback(() => { setAnchor(new Date()); }, []));
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { transactions, balanceByAsset, isLoading, error, remove, removeGroup } = useTransactions({
     onDeleteError: (err) => {
       Alert.alert(i18n.t('common.errorTitle'), err.message || i18n.t('transactionActions.deleteError'));
     },
   });
-  const { assets } = useAssets();
+  const { assets, isLoading: assetsLoading } = useAssets();
   const selectedAssetId = useAppStore((state) => state.selectedAssetId);
   const toggleSelectedAsset = useAppStore((state) => state.toggleSelectedAsset);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<TransactionRow | null>(null);
   const [isAddAccountVisible, setIsAddAccountVisible] = useState(false);
+  const [isManageVisible, setIsManageVisible] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   // x-offset of each carousel card (accounts, then the trailing "Add
   // Account" tile), measured via onLayout since the tile is a different
@@ -203,6 +215,16 @@ export default function DashboardScreen() {
     ? (balanceByAsset.get(focusedAsset.id) ?? 0)
     : assets.reduce((sum, asset) => sum + (balanceByAsset.get(asset.id) ?? 0), 0);
 
+  const period = useMemo(() => getPeriodRange('month', anchor), [anchor]);
+  const summary = useMemo(() => summarizeDashboard(transactions, period.start, period.end, selectedAssetId),
+    [transactions, period, selectedAssetId]);
+  const scope = focusedAsset?.name ?? i18n.t<string>('dashboardDesign.all');
+  function handleAnalysis() {
+    router.push({ pathname: '/(tabs)/analytics', params: {
+      filterAccountId: selectedAssetId ?? '', dashboardMonth: toISODate(period.start),
+    } });
+  }
+
   function toggleAsset(assetId: string) {
     toggleSelectedAsset(assetId);
   }
@@ -266,7 +288,12 @@ export default function DashboardScreen() {
         style={styles.screen}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.hero, { opacity: heroFade }]}>
+        <View style={styles.masthead}>
+          <LinearGradient colors={[colors.mastheadStart, colors.mastheadEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.gradient}>
+            <View style={styles.mastheadSheen} />
+          </LinearGradient>
+          <TopHeader hero onSettingsPress={openSettings} />
+          <Animated.View style={[styles.hero, { opacity: heroFade }]}>
           <Text style={styles.heroLabel} numberOfLines={1}>
             {focusedAsset ? formatAssetLabel(focusedAsset) : i18n.t('dashboard.totalBalance')}
           </Text>
@@ -275,14 +302,30 @@ export default function DashboardScreen() {
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.6}>
-            {formatCurrency(headlineBalance, DEFAULT_CURRENCY)}
+            {isLoading || assetsLoading || error ? '—' : formatCurrency(headlineBalance, DEFAULT_CURRENCY)}
           </Text>
-        </Animated.View>
+          <View style={styles.heroFoot}>
+            <Text style={styles.heroPeriod}>{formatPeriodLabel('month', anchor)}</Text>
+            <Text style={[styles.heroNet, { color: summary.net < 0 ? colors.expense : colors.income }]}>{isLoading || error ? '—' : `${summary.net > 0 ? '+' : ''}${formatCurrency(summary.net, DEFAULT_CURRENCY)}`} · {i18n.t('dashboardDesign.month')}</Text>
+          </View>
+          </Animated.View>
+        </View>
 
+        <View style={styles.body}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{i18n.t('dashboard.myAssets')}</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>{i18n.t('dashboard.myAssets')}</Text>
+            <TouchableOpacity accessibilityRole="button" style={styles.seeAllRow} onPress={() => setIsManageVisible(true)}>
+              <Text style={styles.showAllLink}>{i18n.t('dashboardDesign.manage')}</Text>
+            </TouchableOpacity>
+          </View>
           {assets.length === 0 ? (
-            <Text style={styles.placeholder}>{i18n.t('dashboard.emptyAssets')}</Text>
+            <View style={styles.emptyAccounts}>
+              <Text style={styles.placeholder}>{i18n.t('dashboard.emptyAssets')}</Text>
+              <TouchableOpacity accessibilityRole="button" style={styles.seeAllRow} onPress={() => setIsAddAccountVisible(true)}>
+                <Plus color={colors.tint} size={20} /><Text style={styles.showAllLink}>{i18n.t('manage.addAccount')}</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             // Negative margin lets the cards run to both screen edges while the
             // first one stays aligned with the page gutter.
@@ -332,6 +375,7 @@ export default function DashboardScreen() {
           )}
         </View>
 
+        <DashboardSummary summary={summary} scope={scope} loading={isLoading || assetsLoading} error={error} onAnalysis={handleAnalysis} />
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{i18n.t('dashboard.recentActivity')}</Text>
@@ -352,7 +396,7 @@ export default function DashboardScreen() {
           ) : recentGroups.length === 0 ? (
             <Text style={styles.placeholder}>{i18n.t('dashboard.emptyTransactions')}</Text>
           ) : (
-            <View>
+            <View style={styles.transactionsCard}>
               {recentGroups.map(({ transaction, bucket, showHeader }, index) => {
                 const isIncome = transaction.type === 'income';
                 // A transfer neither earns nor spends, so it carries no sign.
@@ -397,7 +441,9 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+        </View>
       </ScrollView>
+      <LinearGradient pointerEvents="none" colors={[colors.mastheadStart, colors.mastheadEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.statusCover, { height: insets.top }]} />
 
       <AddTransactionModal
         visible={isModalVisible}
@@ -405,6 +451,7 @@ export default function DashboardScreen() {
         transactionToEdit={editingTransaction}
       />
 
+      <ManageAccountsModal visible={isManageVisible} onClose={() => setIsManageVisible(false)} />
       <ManageAccountsModal
         visible={isAddAccountVisible}
         startInCreateMode
@@ -424,13 +471,24 @@ function createStyles(colors: ColorTokens) {
       backgroundColor: colors.background,
     },
     content: {
-      padding: spacing.lg,
-      paddingBottom: spacing.xl,
-      gap: spacing.xl,
+      paddingBottom: 24,
+      gap: 24,
     },
+    body: { paddingHorizontal: 24, gap: 18 },
+    masthead: { paddingBottom: 0 },
+    gradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 36, overflow: 'hidden' },
+    mastheadSheen: { position: 'absolute', right: -80, top: 55, width: 210, height: 210, borderRadius: 105, backgroundColor: 'rgba(255,255,255,0.09)' },
+    statusCover: { position: 'absolute', top: 0, right: 0, left: 0, backgroundColor: colors.mastheadStart },
     hero: {
-      gap: spacing.xs,
+      marginHorizontal: 24, padding: 22, gap: 8, borderRadius: 24,
+      backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+      shadowColor: colors.shadow, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.10, shadowRadius: 24, elevation: 4,
     },
+    heroFoot: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 4 },
+    heroPeriod: { color: colors.textMuted, fontSize: 14 },
+    heroNet: { color: colors.textMuted, fontSize: 12 },
+    emptyAccounts: { gap: 8 },
+    transactionsCard: { backgroundColor: colors.surface, borderRadius: 22, paddingHorizontal: 14, paddingBottom: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
     // Deliberately not uppercased: native casing turns the Turkish "Bakiye" into
     // "BAKIYE" rather than "BAKİYE".
     heroLabel: {
@@ -440,7 +498,7 @@ function createStyles(colors: ColorTokens) {
       color: colors.textMuted,
     },
     heroAmount: {
-      fontSize: 44,
+      fontSize: 40,
       fontWeight: '800',
       // Tight tracking keeps a long figure from looking loose at this size.
       letterSpacing: -1.6,
@@ -450,7 +508,7 @@ function createStyles(colors: ColorTokens) {
       gap: spacing.md,
     },
     sectionTitle: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: '600',
       letterSpacing: -0.2,
       color: colors.text,
@@ -458,11 +516,11 @@ function createStyles(colors: ColorTokens) {
     // Explicitly transparent so the cards float directly on the screen's own
     // background instead of any inherited surface color.
     accountScroll: {
-      marginHorizontal: -spacing.lg,
+      marginHorizontal: -24,
       backgroundColor: 'transparent',
     },
     accountScrollContent: {
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: 24,
       // Room for the focused card to scale up without being clipped.
       paddingVertical: spacing.xs,
       gap: spacing.md,
@@ -492,14 +550,14 @@ function createStyles(colors: ColorTokens) {
       width: 16,
       height: 6,
       borderRadius: 3,
-      backgroundColor: colors.brand,
+      backgroundColor: colors.tint,
     },
     dotInactive: {
       width: 6,
       height: 6,
       borderRadius: 3,
       backgroundColor: colors.border,
-      opacity: 0.6,
+      opacity: 1,
     },
     sectionHeaderRow: {
       flexDirection: 'row',
@@ -510,6 +568,7 @@ function createStyles(colors: ColorTokens) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
+      minHeight: 44,
     },
     showAllLink: {
       fontSize: 13,

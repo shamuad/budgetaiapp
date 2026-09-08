@@ -7,6 +7,12 @@
 
 export const lightColors = {
   background: '#F6F7FB',
+  mastheadStart: '#292185',
+  mastheadEnd: '#5C4AD6',
+  onMastheadMuted: '#E0DEFF',
+  chartPrimary: '#6E5EDE',
+  chartSecondary: '#ABA1DB',
+  chartOther: '#DBD6F0',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
   surfaceGlass: 'rgba(255, 255, 255, 0.72)',
@@ -58,6 +64,12 @@ export const lightColors = {
 
 export const darkColors = {
   background: '#1B1D22',
+  mastheadStart: '#171426',
+  mastheadEnd: '#33265E',
+  onMastheadMuted: '#E0DEFF',
+  chartPrimary: '#8F7DF0',
+  chartSecondary: '#B5AAE3',
+  chartOther: '#DDD7F2',
   surface: '#2C2F36',
   surfaceElevated: '#2C2F36',
   surfaceGlass: 'rgba(255, 255, 255, 0.06)',
