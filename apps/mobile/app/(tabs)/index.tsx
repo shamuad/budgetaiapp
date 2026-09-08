@@ -415,6 +415,7 @@ export default function DashboardScreen() {
                     <View style={[styles.listRow, !isLastInSection && styles.listRowBorder]}>
                       <TransactionItem
                         flat
+                        flatSurface="card"
                         icon={<TransactionIcon transaction={transaction} colors={colors} />}
                         title={transaction.title}
                         subtitle={formatDate(transaction.date, 'short')}
