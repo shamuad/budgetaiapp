@@ -105,7 +105,10 @@ export default {
     sectionEarlier: 'Earlier',
   },
   settings: {
-    title: 'Options',
+    title: 'Settings',
+    appearanceSection: 'Appearance',
+    managementSection: 'Management',
+    sessionDataSection: 'Session & Data',
     manageAccounts: 'Manage Accounts',
     manageCategories: 'Manage Categories',
     clearData: 'Clear Data',

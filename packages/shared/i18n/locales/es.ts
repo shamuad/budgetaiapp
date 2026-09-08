@@ -28,6 +28,10 @@ export default {
     greetingEvening: 'Buenas noches, %{name}',
   },
   profile: {
+    appTheme: 'Tema de la aplicación',
+    themeAuto: 'Sistema',
+    themeLight: 'Claro',
+    themeDark: 'Oscuro',
     accountSection: 'Cuenta',
     logout: 'Cerrar sesión',
     logoutTitle: '¿Cerrar sesión?',
@@ -35,6 +39,15 @@ export default {
     changeAvatar: 'Cambiar foto de perfil',
     avatarPermissionDenied: 'Se denegó el acceso a la galería. Actívalo en Ajustes para cambiar tu foto.',
     avatarUploadError: 'No se pudo actualizar tu foto de perfil.',
+  },
+  settings: {
+    title: 'Ajustes',
+    appearanceSection: 'Apariencia',
+    managementSection: 'Gestión',
+    sessionDataSection: 'Sesión y datos',
+    manageAccounts: 'Gestionar cuentas',
+    manageCategories: 'Gestionar categorías',
+    clearData: 'Borrar datos',
   },
   auth: {
     loginTitle: 'Bienvenido de nuevo',

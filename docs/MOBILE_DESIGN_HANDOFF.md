@@ -42,7 +42,7 @@ Figma's 40-point visual segment was implemented with the existing 44-point touch
 ## Protected product decisions
 
 - Accounts keep drag-and-drop ordering, real bank identity, account-edit color/gradient choice and preview. Selecting a Dashboard account filters calculations on the same page.
-- Settings keeps account/category management; use a recognizable upper-right settings control in the eventual Dashboard migration.
+- Settings keeps account/category management. The upper-right Dashboard control opens Figma node `36:3` as a rounded bottom sheet with Appearance, Management, and Session & Data groups; the legacy anchored popover is retired.
 - Dashboard's center plus opens New Transaction; smart text, hold-to-speak and receipt entry belong there. The plus stays anchored to navigation.
 - Account pagination is compact dots. Income is green, expense red and monthly net neutral. Keep a compact top-category spending summary with an Analysis link; do not invent a budget percentage when no matching budget model exists.
 - Existing receipt/voice/text assistance is separate from the planned full AI Assistant. The latter and conditional family sharing remain in BACKLOG.
@@ -76,6 +76,11 @@ Rollback: revert the presentation commit through a PR. No data migration is requ
 - Mobile preview runs on localhost:8082, with live reload; the owner's existing server on 8081 was preserved. The local Next finance API was configured separately on 127.0.0.1:3000 using the same public Supabase connection; unauthenticated request rejection is checked separately from authenticated market-data behavior.
 - `npm run verify` passed again after the foreground contrast fixes. CI also passed for the foreground-contrast follow-up and the management-test commit; each later commit still requires its own green checks.
 - Native screenshots were inspected privately in the simulator, not uploaded with personal finance data. Remaining review: large text, all supported locales, Android/physical devices, persisted CRUD and reorder behavior in disposable test data.
+
+## Settings sheet follow-up — 2026-09-08
+
+- Replaced the legacy header-anchored popover with the approved Figma `Settings — Açık` bottom sheet (`36:3`): 28-point top corners, dimmed backdrop, 24-point side inset, filled appearance selector and grouped management/session rows.
+- Preserved Manage Accounts, Manage Categories, Light/Dark/System preference, clear-data confirmation and logout confirmation. Verified the two management destinations open and return to Settings; checked Light → Dark B → Light and restored Light without changing financial records.
 
 ## Account editor and persistence follow-up — 2026-09-07
 

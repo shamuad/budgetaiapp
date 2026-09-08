@@ -5,7 +5,7 @@ import {
   useDeleteAllTransactionsMutation,
   useTransactionsQuery,
 } from '@budgetaiapp/shared';
-import { Folder, LogOut, Trash2, Wallet } from 'lucide-react-native';
+import { ChevronRight, Folder, Wallet, X } from 'lucide-react-native';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,8 +25,9 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { radius, spacing, TOUCH_TARGET } from '../theme';
+import { spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
 import ManageAccountsModal from './manage/ManageAccountsModal';
 import ManageCategoriesModal from './manage/ManageCategoriesModal';
@@ -51,14 +52,14 @@ const THEME_OPTIONS: { id: ThemePreference; label: () => string }[] = [
   { id: 'dark', label: () => i18n.t('profile.themeDark') },
 ];
 
-const POPOVER_WIDTH = 232;
-const POPOVER_GAP = 6;
+const FIGMA_SHEET_HEIGHT = 560;
 
 /**
- * Settings popover anchored under the header gear. Manage screens open on
- * top of it; dismissing the overlay always returns to a closed gear.
+ * Dashboard settings sheet from Figma node 36:3. The header gear remains the
+ * entry point; management destinations are presented over the sheet and
+ * return here when dismissed.
  */
-export default function OptionsModal({ visible, onClose, anchor }: OptionsModalProps) {
+export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
   const { colors, preference, setPreference } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { transactions } = useTransactionsQuery();
@@ -67,13 +68,16 @@ export default function OptionsModal({ visible, onClose, anchor }: OptionsModalP
   const [destination, setDestination] = useState<'accounts' | 'categories' | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const progress = useSharedValue(0);
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
 
   const count = transactions.length;
   const menuVisible = visible && destination === null;
+  const sheetHeight = Math.min(FIGMA_SHEET_HEIGHT, windowHeight - spacing.sm);
 
   useEffect(() => {
     progress.value = withTiming(menuVisible ? 1 : 0, {
-      duration: 160,
+      duration: 220,
       easing: Easing.out(Easing.cubic),
     });
   }, [menuVisible, progress]);
@@ -128,14 +132,12 @@ export default function OptionsModal({ visible, onClose, anchor }: OptionsModalP
     ]);
   };
 
-  const { width: windowWidth } = useWindowDimensions();
-  const placement = placePopover(anchor, windowWidth);
-  const popoverStyle = useAnimatedStyle(() => ({
+  const backdropStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [
-      { translateY: interpolate(progress.value, [0, 1], [-6, 0]) },
-      { scale: interpolate(progress.value, [0, 1], [0.96, 1]) },
-    ],
+  }));
+  const sheetStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: interpolate(progress.value, [0, 1], [56, 0]) }],
   }));
 
   return (
@@ -147,7 +149,8 @@ export default function OptionsModal({ visible, onClose, anchor }: OptionsModalP
         statusBarTranslucent
         presentationStyle="overFullScreen"
         onRequestClose={close}>
-        <View style={styles.overlay}>
+        <View style={styles.overlay} accessibilityViewIsModal>
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={close}
@@ -155,8 +158,27 @@ export default function OptionsModal({ visible, onClose, anchor }: OptionsModalP
             accessibilityLabel={i18n.t('addTransaction.cancel')}
           />
 
-          <Animated.View style={[styles.popover, placement, popoverStyle]}>
-            <Text style={styles.themeLabel}>{i18n.t('profile.appTheme')}</Text>
+          <Animated.View
+            style={[
+              styles.sheet,
+              { height: sheetHeight, paddingBottom: Math.max(24, insets.bottom) },
+              sheetStyle,
+            ]}>
+            <View style={styles.header}>
+              <Text accessibilityRole="header" style={styles.title}>
+                {i18n.t('settings.title')}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={close}
+                style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel={i18n.t('addTransaction.cancel')}>
+                <X color={colors.text} size={22} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionLabel}>{i18n.t('settings.appearanceSection')}</Text>
             <SegmentedControl
               options={THEME_OPTIONS.map(({ id, label }) => ({ id, label: label() }))}
               value={preference}
@@ -164,42 +186,43 @@ export default function OptionsModal({ visible, onClose, anchor }: OptionsModalP
               style={styles.themeControl}
             />
 
-            <OptionRow
-              styles={styles}
-              icon={<Wallet color={colors.tint} size={18} />}
-              label={i18n.t('settings.manageAccounts')}
-              onPress={() => setDestination('accounts')}
-            />
-            <OptionRow
-              styles={styles}
-              icon={<Folder color={colors.tint} size={18} />}
-              label={i18n.t('settings.manageCategories')}
-              onPress={() => setDestination('categories')}
-            />
+            <Text style={styles.sectionLabel}>{i18n.t('settings.managementSection')}</Text>
+            <View style={styles.group}>
+              <OptionRow
+                styles={styles}
+                icon={<Wallet color={colors.tint} size={20} strokeWidth={1.8} />}
+                label={i18n.t('settings.manageAccounts')}
+                onPress={() => setDestination('accounts')}
+                showChevron
+              />
+              <OptionRow
+                styles={styles}
+                icon={<Folder color={colors.tint} size={20} strokeWidth={1.8} />}
+                label={i18n.t('settings.manageCategories')}
+                onPress={() => setDestination('categories')}
+                showChevron
+                isLast
+              />
+            </View>
 
-            <OptionRow
-              styles={styles}
-              icon={<Trash2 color={colors.danger} size={18} />}
-              label={i18n.t('settings.clearData')}
-              onPress={confirmClearData}
-              isDestructive
-              isDisabled={count === 0}
-            />
-            <OptionRow
-              styles={styles}
-              icon={
-                isSigningOut ? (
-                  <ActivityIndicator size="small" color={colors.danger} />
-                ) : (
-                  <LogOut color={colors.danger} size={18} />
-                )
-              }
-              label={i18n.t('profile.logout')}
-              onPress={handleLogout}
-              isDestructive
-              isDisabled={isSigningOut}
-              isLast
-            />
+            <Text style={styles.sectionLabel}>{i18n.t('settings.sessionDataSection')}</Text>
+            <View style={styles.group}>
+              <OptionRow
+                styles={styles}
+                icon={isSigningOut ? <ActivityIndicator size="small" color={colors.text} /> : undefined}
+                label={i18n.t('profile.logout')}
+                onPress={handleLogout}
+                isDisabled={isSigningOut}
+              />
+              <OptionRow
+                styles={styles}
+                label={i18n.t('settings.clearData')}
+                onPress={confirmClearData}
+                isDestructive
+                isDisabled={count === 0}
+                isLast
+              />
+            </View>
           </Animated.View>
         </View>
       </Modal>
@@ -216,25 +239,17 @@ export default function OptionsModal({ visible, onClose, anchor }: OptionsModalP
   );
 }
 
-function placePopover(anchor: SettingsAnchor | null, windowWidth: number) {
-  const maxLeft = windowWidth - POPOVER_WIDTH - spacing.lg;
-  const alignedLeft = anchor ? anchor.x + anchor.width - POPOVER_WIDTH : maxLeft;
-  const left = Math.min(Math.max(spacing.lg, alignedLeft), maxLeft);
-  const top = anchor ? anchor.y + anchor.height + POPOVER_GAP : 72;
-
-  return { top, left, width: POPOVER_WIDTH };
-}
-
 type SheetStyles = ReturnType<typeof createStyles>;
 
 type OptionRowProps = {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   onPress: () => void;
   styles: SheetStyles;
   isDestructive?: boolean;
   isDisabled?: boolean;
   isLast?: boolean;
+  showChevron?: boolean;
 };
 
 function OptionRow({
@@ -245,15 +260,26 @@ function OptionRow({
   isDestructive,
   isDisabled,
   isLast,
+  showChevron,
 }: OptionRowProps) {
   return (
     <TouchableOpacity
-      activeOpacity={0.6}
+      activeOpacity={0.65}
       onPress={onPress}
       disabled={isDisabled}
-      style={[styles.row, isLast && styles.rowLast, isDisabled && styles.rowDisabled]}>
-      {icon}
-      <Text style={[styles.rowLabel, isDestructive && styles.rowLabelDestructive]}>{label}</Text>
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
+      style={[styles.row, !isLast && styles.rowDivider, isDisabled && styles.rowDisabled]}>
+      {icon ? <View style={styles.rowIcon}>{icon}</View> : null}
+      <Text
+        style={[
+          styles.rowLabel,
+          !icon && styles.rowLabelWithoutIcon,
+          isDestructive && styles.rowLabelDestructive,
+        ]}>
+        {label}
+      </Text>
+      {showChevron ? <ChevronRight color={styles.chevronColor.color} size={18} strokeWidth={1.8} /> : null}
     </TouchableOpacity>
   );
 }
@@ -262,49 +288,88 @@ function createStyles(colors: ColorTokens) {
   return StyleSheet.create({
     overlay: {
       flex: 1,
+      justifyContent: 'flex-end',
     },
-    popover: {
-      position: 'absolute',
-      transformOrigin: 'top right',
+    backdrop: {
+      backgroundColor: colors.overlay,
+    },
+    sheet: {
+      width: '100%',
       overflow: 'hidden',
-      paddingTop: spacing.md,
-      borderRadius: radius.lg,
-      backgroundColor: colors.surfaceElevated,
+      paddingTop: spacing.lg,
+      paddingHorizontal: spacing.xl,
+      gap: 20,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: colors.background,
       borderWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: 0,
       borderColor: colors.borderGlass,
       shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.45,
-      shadowRadius: 20,
-      elevation: 16,
+      shadowOffset: { width: 0, height: -8 },
+      shadowOpacity: 0.18,
+      shadowRadius: 24,
+      elevation: 20,
     },
-    themeLabel: {
-      paddingHorizontal: spacing.md,
-      marginBottom: spacing.sm,
+    header: {
+      height: TOUCH_TARGET,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    title: {
+      flex: 1,
+      fontSize: 24,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    closeButton: {
+      width: TOUCH_TARGET,
+      height: TOUCH_TARGET,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: TOUCH_TARGET / 2,
+      backgroundColor: colors.border,
+    },
+    sectionLabel: {
       fontSize: 11,
       fontWeight: '600',
-      letterSpacing: 0.4,
+      letterSpacing: 0.35,
       textTransform: 'uppercase',
       color: colors.textMuted,
     },
     themeControl: {
-      marginHorizontal: spacing.md,
-      marginBottom: spacing.md,
+      minHeight: 48,
+      marginTop: -1,
+      backgroundColor: colors.brandSurface,
+      borderWidth: 0,
+    },
+    group: {
+      overflow: 'hidden',
+      borderRadius: 18,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderGlass,
     },
     row: {
+      height: 56,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md,
-      minHeight: TOUCH_TARGET,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: 18,
+    },
+    rowDivider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
-    rowLast: {
-      borderBottomWidth: 0,
-    },
     rowDisabled: {
       opacity: 0.4,
+    },
+    rowIcon: {
+      width: 20,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.md,
     },
     rowLabel: {
       flex: 1,
@@ -312,8 +377,14 @@ function createStyles(colors: ColorTokens) {
       fontWeight: '500',
       color: colors.text,
     },
+    rowLabelWithoutIcon: {
+      paddingLeft: 0,
+    },
     rowLabelDestructive: {
       color: colors.dangerText,
+    },
+    chevronColor: {
+      color: colors.textMuted,
     },
   });
 }

@@ -28,6 +28,10 @@ export default {
     greetingEvening: 'Goedenavond, %{name}',
   },
   profile: {
+    appTheme: 'App-thema',
+    themeAuto: 'Systeem',
+    themeLight: 'Licht',
+    themeDark: 'Donker',
     accountSection: 'Account',
     logout: 'Uitloggen',
     logoutTitle: 'Uitloggen?',
@@ -35,6 +39,15 @@ export default {
     changeAvatar: 'Profielfoto wijzigen',
     avatarPermissionDenied: 'Toegang tot de fotobibliotheek is geweigerd. Schakel dit in bij Instellingen om je foto te wijzigen.',
     avatarUploadError: 'Je profielfoto kon niet worden bijgewerkt.',
+  },
+  settings: {
+    title: 'Instellingen',
+    appearanceSection: 'Weergave',
+    managementSection: 'Beheer',
+    sessionDataSection: 'Sessie en gegevens',
+    manageAccounts: 'Rekeningen beheren',
+    manageCategories: 'Categorieën beheren',
+    clearData: 'Gegevens wissen',
   },
   auth: {
     loginTitle: 'Welkom terug',

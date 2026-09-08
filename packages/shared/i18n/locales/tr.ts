@@ -105,7 +105,10 @@ export default {
     sectionEarlier: 'Daha Önce',
   },
   settings: {
-    title: 'Seçenekler',
+    title: 'Ayarlar',
+    appearanceSection: 'Görünüm',
+    managementSection: 'Yönetim',
+    sessionDataSection: 'Oturum ve Veriler',
     manageAccounts: 'Hesapları Yönet',
     manageCategories: 'Kategorileri Yönet',
     clearData: 'Verileri Temizle',
