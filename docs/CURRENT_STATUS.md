@@ -4,7 +4,7 @@
 **Verified main snapshot:** `05d7f66feba7806cef0ebe1717d75bb6d789b87e` (PR #7 merged)
 **Main checked:** 2026-09-07
 **Post-merge CI:** both jobs successful, as confirmed by the product owner
-**Delivery branch:** `design/dashboard`, stacked on `design/mobile-foundation` — [draft PR #8](https://github.com/shamuad/budgetaiapp/pull/8) remains unmerged
+**Delivery branch:** `design/dashboard` — [draft PR #9](https://github.com/shamuad/budgetaiapp/pull/9), stacked on `design/mobile-foundation`; [draft PR #8](https://github.com/shamuad/budgetaiapp/pull/8) remains unmerged
 
 ## Single active task
 
