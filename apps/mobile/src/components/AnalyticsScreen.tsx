@@ -1,18 +1,30 @@
 import {
   calculateBudgetBreakdown,
-  DEFAULT_CURRENCY,
+  selectPeriodTransactions,
+  fromISODate,
+  useAssets,
   formatCurrency,
   getCategoryColor,
   i18n,
   resolveCategoryName,
   toBaseAmount,
+  toReportingAmount,
   transactionPeriodDate,
   useTransactionsQuery,
+  useReportingCurrencyQuery,
   type TransactionRow,
 } from '@budgetaiapp/shared';
 import { BarChart3, ChartLine } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
-import { FlatList, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  LayoutAnimation,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
 
 import { formatPeriodLabel, getPeriodRange, shiftAnchor } from '../lib/analyticsPeriod';
@@ -34,7 +46,7 @@ const YEAR_BAR_RADIUS = 4;
 // Android out of the box — the old `UIManager.setLayoutAnimationEnabledExperimental`
 // opt-in is a Legacy-Architecture-only no-op there and just logs a warning.
 
-export default function AnalyticsScreen() {
+export default function AnalyticsScreen({ accountId, dashboardMonth, onClearScope }: { accountId?: string; dashboardMonth?: string; onClearScope?: () => void }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -45,6 +57,13 @@ export default function AnalyticsScreen() {
   const [isYearLineView, setIsYearLineView] = useState(false);
 
   const { transactions } = useTransactionsQuery();
+  const { assets } = useAssets();
+  const reportingPreference = useReportingCurrencyQuery();
+  const scopedAccount = assets.find(asset => asset.id === accountId);
+  useEffect(() => {
+    const requested = dashboardMonth ? fromISODate(dashboardMonth) : null;
+    if (requested) { setAnchorDate(requested); setTimeframe('month'); }
+  }, [dashboardMonth]);
 
   const periodRange = useMemo(() => getPeriodRange(timeframe, anchorDate), [timeframe, anchorDate]);
   const periodLabel = useMemo(() => formatPeriodLabel(timeframe, anchorDate), [timeframe, anchorDate]);
@@ -52,11 +71,8 @@ export default function AnalyticsScreen() {
   const periodTransactions = useMemo(() => {
     const { start, end } = periodRange;
 
-    return transactions.filter((row) => {
-      const date = transactionPeriodDate(row);
-      return date !== null && date >= start && date < end;
-    });
-  }, [transactions, periodRange]);
+    return selectPeriodTransactions(transactions, start, end, accountId);
+  }, [transactions, periodRange, accountId]);
 
   // Spending Breakdown always looks at expenses only, regardless of which
   // chart is showing above it — it answers "where did the money go".
@@ -72,7 +88,10 @@ export default function AnalyticsScreen() {
       }
 
       const key = row.category_id ?? '__uncategorized__';
-      const amount = toBaseAmount(row.amount, row.exchange_rate);
+      const amount = toReportingAmount(
+        toBaseAmount(row.amount, row.exchange_rate),
+        reportingPreference.exchangeRate,
+      );
       const existing = totals.get(key);
 
       if (existing) {
@@ -95,7 +114,7 @@ export default function AnalyticsScreen() {
         share: totalSpent > 0 ? item.amount / totalSpent : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
-  }, [periodTransactions]);
+  }, [periodTransactions, reportingPreference.exchangeRate]);
 
   const totalSpent = useMemo(() => ledger.reduce((sum, entry) => sum + entry.amount, 0), [ledger]);
 
@@ -122,7 +141,10 @@ export default function AnalyticsScreen() {
         continue;
       }
 
-      const amount = toBaseAmount(row.amount, row.exchange_rate);
+      const amount = toReportingAmount(
+        toBaseAmount(row.amount, row.exchange_rate),
+        reportingPreference.exchangeRate,
+      );
       if (row.type === 'income') {
         income += amount;
       } else {
@@ -131,7 +153,7 @@ export default function AnalyticsScreen() {
     }
 
     return income - expense;
-  }, [periodTransactions]);
+  }, [periodTransactions, reportingPreference.exchangeRate]);
 
   // A year zooms out to a monthly income-vs-expense trend instead of a single
   // period's category split — the ledger below still summarizes the whole year.
@@ -158,7 +180,10 @@ export default function AnalyticsScreen() {
         continue;
       }
 
-      const amount = toBaseAmount(row.amount, row.exchange_rate);
+      const amount = toReportingAmount(
+        toBaseAmount(row.amount, row.exchange_rate),
+        reportingPreference.exchangeRate,
+      );
       const bucket = monthBuckets[date.getMonth()];
 
       if (row.type === 'income') {
@@ -222,7 +247,7 @@ export default function AnalyticsScreen() {
         },
       ];
     });
-  }, [timeframe, anchorDate, periodTransactions, colors]);
+  }, [timeframe, anchorDate, periodTransactions, colors, reportingPreference.exchangeRate]);
 
   // Alternate Year view: one colored line per spending category, each
   // tracing that category's monthly total — the same expense breakdown as
@@ -250,7 +275,10 @@ export default function AnalyticsScreen() {
       }
 
       const key = row.category_id ?? '__uncategorized__';
-      const amount = toBaseAmount(row.amount, row.exchange_rate);
+      const amount = toReportingAmount(
+        toBaseAmount(row.amount, row.exchange_rate),
+        reportingPreference.exchangeRate,
+      );
       let bucket = byCategory.get(key);
 
       if (!bucket) {
@@ -301,7 +329,7 @@ export default function AnalyticsScreen() {
         label: monthFormatter.format(new Date(year, index, 1)),
       })),
     }));
-  }, [timeframe, anchorDate, periodTransactions, colors]);
+  }, [timeframe, anchorDate, periodTransactions, colors, reportingPreference.exchangeRate]);
 
   // Daily/weekly income is episodic (usually paid monthly), so a Net Balance
   // for those windows reads as a scary, misleading loss rather than a useful
@@ -317,8 +345,22 @@ export default function AnalyticsScreen() {
     setAnchorDate((current) => shiftAnchor(timeframe, current, direction));
   }
 
+  if (reportingPreference.isLoading) {
+    return (
+      <View style={[styles.screen, styles.loadingScreen]}>
+        <ActivityIndicator color={colors.tint} />
+      </View>
+    );
+  }
+
   const listHeader = (
     <View style={styles.header}>
+      {accountId && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Text style={{ flex: 1, color: colors.text, fontSize: 14 }}>{scopedAccount?.name ?? i18n.t('dashboardDesign.all')}</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={onClearScope} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={{ color: colors.tint }}>{i18n.t('dashboardDesign.clear')}</Text>
+        </TouchableOpacity>
+      </View>}
       <SegmentedControl
         options={analyticsTimeframeOptions()}
         value={timeframe}
@@ -335,7 +377,7 @@ export default function AnalyticsScreen() {
             ]}
             numberOfLines={1}>
             {netCashFlow >= 0 ? '+' : ''}
-            {formatCurrency(netCashFlow, DEFAULT_CURRENCY)}
+            {formatCurrency(netCashFlow, reportingPreference.currency)}
           </Text>
         </View>
       )}
@@ -445,7 +487,7 @@ export default function AnalyticsScreen() {
             centerLabelComponent={() => (
               <View style={styles.centerLabel}>
                 <Text style={styles.centerLabelAmount} numberOfLines={1}>
-                  {formatCurrency(totalSpent, DEFAULT_CURRENCY)}
+                  {formatCurrency(totalSpent, reportingPreference.currency)}
                 </Text>
                 <Text style={styles.centerLabelCaption}>{i18n.t('analytics.totalSpent')}</Text>
               </View>
@@ -458,7 +500,11 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
-      <BudgetBreakdownCard breakdown={budgetBreakdown} />
+      <BudgetBreakdownCard
+        breakdown={budgetBreakdown}
+        reportingCurrency={reportingPreference.currency}
+        reportingExchangeRate={reportingPreference.exchangeRate}
+      />
 
       <Text style={styles.sectionTitle}>{i18n.t('analytics.spendingBreakdown')}</Text>
     </View>
@@ -471,7 +517,10 @@ export default function AnalyticsScreen() {
       data={ledger}
       keyExtractor={(entry) => entry.key}
       renderItem={({ item }) => (
-        <CategoryLedgerRow entry={item} amountLabel={formatCurrency(item.amount, DEFAULT_CURRENCY)} />
+        <CategoryLedgerRow
+          entry={item}
+          amountLabel={formatCurrency(item.amount, reportingPreference.currency)}
+        />
       )}
       ListHeaderComponent={listHeader}
       ListEmptyComponent={
@@ -502,6 +551,10 @@ function createStyles(colors: ColorTokens) {
       padding: spacing.lg,
       paddingBottom: spacing.xl * 2,
       gap: spacing.md,
+    },
+    loadingScreen: {
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     header: {
       gap: spacing.lg,

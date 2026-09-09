@@ -29,6 +29,8 @@ type TransactionItemProps = {
   account?: TransactionAccount | null;
   /** Drops the card background, for rows that already sit inside one. */
   flat?: boolean;
+  /** Keeps a flat swipeable row opaque against either the page or a parent card. */
+  flatSurface?: 'canvas' | 'card';
   /** Tap opens the editor. */
   onEdit?: () => void;
   /** Left-swipe reveals a single Delete action. */
@@ -75,6 +77,7 @@ export default function TransactionItem({
   negative,
   account,
   flat,
+  flatSurface = 'canvas',
   onEdit,
   onDelete,
   deleteConfirmation,
@@ -128,7 +131,12 @@ export default function TransactionItem({
         style={[
           styles.item,
           flat && styles.itemFlat,
-          isActionable && (flat ? styles.itemOpaqueOnCanvas : styles.itemOpaque),
+          isActionable &&
+            (flat
+              ? flatSurface === 'card'
+                ? styles.itemOpaqueOnCard
+                : styles.itemOpaqueOnCanvas
+              : styles.itemOpaque),
         ]}>
         <View style={styles.iconWrapper}>{icon}</View>
         <View style={styles.texts}>
@@ -245,9 +253,13 @@ function createStyles(colors: ColorTokens) {
     itemOpaque: {
       backgroundColor: colors.surfaceElevated,
     },
-    // Flat rows sit on the screen canvas — still opaque so swipe actions can slide under.
+    // Flat rows stay opaque so swipe actions can slide underneath. Dashboard
+    // rows inherit the enclosing card surface; the full list uses the canvas.
     itemOpaqueOnCanvas: {
       backgroundColor: colors.background,
+    },
+    itemOpaqueOnCard: {
+      backgroundColor: colors.surface,
     },
     iconWrapper: {
       width: 40,

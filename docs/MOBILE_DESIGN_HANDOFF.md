@@ -42,7 +42,7 @@ Figma's 40-point visual segment was implemented with the existing 44-point touch
 ## Protected product decisions
 
 - Accounts keep drag-and-drop ordering, real bank identity, account-edit color/gradient choice and preview. Selecting a Dashboard account filters calculations on the same page.
-- Settings keeps account/category management; use a recognizable upper-right settings control in the eventual Dashboard migration.
+- Settings keeps account/category management. The upper-right Dashboard control opens Figma node `36:3` as a rounded bottom sheet with Appearance, Management, and Session & Data groups; the legacy anchored popover is retired.
 - Dashboard's center plus opens New Transaction; smart text, hold-to-speak and receipt entry belong there. The plus stays anchored to navigation.
 - Account pagination is compact dots. Income is green, expense red and monthly net neutral. Keep a compact top-category spending summary with an Analysis link; do not invent a budget percentage when no matching budget model exists.
 - Existing receipt/voice/text assistance is separate from the planned full AI Assistant. The latter and conditional family sharing remain in BACKLOG.
@@ -77,6 +77,11 @@ Rollback: revert the presentation commit through a PR. No data migration is requ
 - `npm run verify` passed again after the foreground contrast fixes. CI also passed for the foreground-contrast follow-up and the management-test commit; each later commit still requires its own green checks.
 - Native screenshots were inspected privately in the simulator, not uploaded with personal finance data. Remaining review: large text, all supported locales, Android/physical devices, persisted CRUD and reorder behavior in disposable test data.
 
+## Settings sheet follow-up — 2026-09-08
+
+- Replaced the legacy header-anchored popover with the approved Figma `Settings — Açık` bottom sheet (`36:3`): 28-point top corners, dimmed backdrop, 24-point side inset, filled appearance selector and grouped management/session rows.
+- Preserved Manage Accounts, Manage Categories, Light/Dark/System preference, clear-data confirmation and logout confirmation. Verified the two management destinations open and return to Settings; checked Light → Dark B → Light and restored Light without changing financial records.
+
 ## Account editor and persistence follow-up — 2026-09-07
 
 - Account visual reference: [83:7](https://www.figma.com/design/DNCO9VdZXXg89czkRoLqvi?node-id=83-7). Applied a 92-point bank halo, 20-point outer inset, 24-point form radius and a 321:154 card preview with 22-point radius. Use accepted D2 semantic colors and real bank assets from code.
@@ -86,3 +91,13 @@ Rollback: revert the presentation commit through a PR. No data migration is requ
 - Added `test:integration:management` to the isolated GitHub database job. It creates disposable users, tests default-category hide/restore while retaining transaction references and localization metadata, custom-category create/edit/unused delete, persisted account ordering after refetch and cross-user update isolation. It rejects non-local database URLs and cleans up only its disposable users.
 - [CI run 34160248572](https://github.com/shamuad/budgetaiapp/actions/runs/34160248572) passed both jobs at `b7d442f`, including the new management test. Root verification passed before the final selector-wrap adjustment; mobile typecheck and diff checks passed after that adjustment. The final PR head must pass CI before merge.
 - These API-level tests do not exercise native drag gestures, UI deletion confirmations, concurrent deletion races, keyboard behavior or physical-device accessibility. Those remain separate acceptance work.
+
+## Dashboard implementation follow-up — 2026-09-08
+
+- Implemented the approved Light node `8:2` and Dark B node `63:2` using the existing React Native components and semantic theme tokens. The layout uses a gradient masthead, overlapping balance surface, compact account cards and pagination, monthly overview, bounded spending summary and five equal navigation cells.
+- Monthly income, expense and net are computed from real ledger rows using the same billing-period date and stored exchange-rate rules as Analytics. Transfers are excluded from cash-flow totals. Spending shows the two largest categories plus a reconciled Other amount, so the card height stays bounded.
+- Selecting an account still filters the Dashboard in place. The selection now also scopes monthly totals, category spending and recent activity. `View analysis` passes the selected account and month to Analytics, where the scope can be cleared back to all accounts.
+- The center Add action stays inside the safe-area-aware bottom bar and opens the existing New Transaction modal. The Assistant cell uses the exact Figma-exported icon but remains disabled and explicitly labelled as planned; no assistant capability was added.
+- Native iPhone 17 simulator checks covered account filtering, Analysis context transfer and clearing, Add opening, settings anchoring, Light and Dark B rendering. The owner's theme preference was restored to Light; no financial row was saved or deleted.
+- Root verification passed on 2026-09-08: lint, all typechecks, 57 tests and the web production build. Four new unit tests cover monthly cash flow, statement-month boundaries, account scope, category reconciliation and empty state.
+- [Draft PR #9](https://github.com/shamuad/budgetaiapp/pull/9) is stacked on the unmerged mobile-foundation branch. Review and merge order must preserve that dependency; PR #8 still requires explicit product approval.

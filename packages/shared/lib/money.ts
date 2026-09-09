@@ -106,11 +106,18 @@ export function localeNumberParts(
   };
 }
 
+// Keep these product-supported symbols explicit. Some Hermes/ICU builds emit
+// the ISO code for TRY ("TRY0.00"); in the compact picker that became a
+// truncated "T…" and made the same currency look different across screens.
+const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
+  EUR: '€',
+  USD: '$',
+  GBP: '£',
+  TRY: '₺',
+};
+
 function currencySymbolFor(currency: CurrencyCode) {
-  return (
-    new Intl.NumberFormat('en', { style: 'currency', currency }).format(0).replace(/[\d\s.,]/g, '') ||
-    currency
-  );
+  return CURRENCY_SYMBOLS[currency];
 }
 
 /** Formats a number with explicit separators so Hermes/ICU cannot force US commas. */
