@@ -1,10 +1,33 @@
-import { DEFAULT_CURRENCY, formatCurrency, i18n, resolveCategoryName, summarizeDashboard } from '@budgetaiapp/shared';
+import {
+  type CurrencyCode,
+  formatCurrency,
+  i18n,
+  resolveCategoryName,
+  summarizeDashboard,
+  toReportingAmount,
+} from '@budgetaiapp/shared';
 import { ChevronRight } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../theming';
 
-type Props = { summary: ReturnType<typeof summarizeDashboard>; scope: string; loading: boolean; error?: string | null; onAnalysis: () => void };
-export default function DashboardSummary({ summary, scope, loading, error, onAnalysis }: Props) {
+type Props = {
+  summary: ReturnType<typeof summarizeDashboard>;
+  scope: string;
+  loading: boolean;
+  error?: string | null;
+  reportingCurrency: CurrencyCode;
+  reportingExchangeRate: number;
+  onAnalysis: () => void;
+};
+export default function DashboardSummary({
+  summary,
+  scope,
+  loading,
+  error,
+  reportingCurrency,
+  reportingExchangeRate,
+  onAnalysis,
+}: Props) {
   const { colors } = useAppTheme();
   const surface = { backgroundColor: colors.surface, borderColor: colors.border };
   const entries = summary.topCategories.map((entry, index) => ({
@@ -25,7 +48,7 @@ export default function DashboardSummary({ summary, scope, loading, error, onAna
         {figures.map(item => <View key={item.key} style={styles.figure}>
           <Text style={[styles.label, { color: colors.textMuted }]}>{i18n.t(`dashboardDesign.${item.key}`)}</Text>
           <Text style={[styles.amount, { color: item.color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {loading || error ? '—' : `${item.key === 'net' && item.amount > 0 ? '+' : ''}${formatCurrency(item.amount, DEFAULT_CURRENCY)}`}
+            {loading || error ? '—' : `${item.key === 'net' && item.amount > 0 ? '+' : ''}${formatCurrency(toReportingAmount(item.amount, reportingExchangeRate), reportingCurrency)}`}
           </Text>
         </View>)}
       </View>
@@ -39,7 +62,7 @@ export default function DashboardSummary({ summary, scope, loading, error, onAna
       <View style={[styles.spending, surface]}>
         <View style={styles.row}>
           <Text style={[styles.scope, { color: colors.textMuted }]} numberOfLines={2}>{i18n.t('dashboardDesign.month')} · {scope}</Text>
-          <Text style={[styles.total, { color: colors.text }]}>{loading || error ? '—' : formatCurrency(summary.expense, DEFAULT_CURRENCY)}</Text>
+          <Text style={[styles.total, { color: colors.text }]}>{loading || error ? '—' : formatCurrency(toReportingAmount(summary.expense, reportingExchangeRate), reportingCurrency)}</Text>
         </View>
         {loading ? <ActivityIndicator color={colors.tint} /> : error ? <Text style={{ color: colors.expense }}>{error}</Text> : summary.expense <= 0 ?
           <Text style={[styles.empty, { color: colors.textMuted }]}>{i18n.t('dashboardDesign.empty')}</Text> : <>
@@ -49,7 +72,7 @@ export default function DashboardSummary({ summary, scope, loading, error, onAna
             {entries.map(entry => <View key={entry.key} style={styles.row}>
               <View style={[styles.dot, { backgroundColor: entry.color }]} />
               <Text style={[styles.category, { color: colors.text }]} numberOfLines={1}>{entry.name}</Text>
-              <Text style={{ color: colors.text, fontSize: 13 }}>{formatCurrency(entry.amount, DEFAULT_CURRENCY)}</Text>
+              <Text style={{ color: colors.text, fontSize: 13 }}>{formatCurrency(toReportingAmount(entry.amount, reportingExchangeRate), reportingCurrency)}</Text>
             </View>)}
           </>}
       </View>

@@ -1,12 +1,13 @@
 import {
   Asset,
+  type CurrencyCode,
   i18n,
-  DEFAULT_CURRENCY,
   formatCurrency,
   getFaviconUrl,
   isRemoteIcon,
   resolveAccountCardAppearance,
   resolveBrand,
+  toReportingAmount,
 } from '@budgetaiapp/shared';
 import { Wallet } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -30,6 +31,9 @@ export const ACCOUNT_CARD_HEIGHT = 108;
 type AccountCardProps = {
   asset: Asset;
   balance: number;
+  reportingCurrency: CurrencyCode;
+  reportingExchangeRate: number;
+  reportingLoading: boolean;
   isFocused: boolean;
   isDimmed: boolean;
   onPress: () => void;
@@ -38,6 +42,9 @@ type AccountCardProps = {
 export default function AccountCard({
   asset,
   balance,
+  reportingCurrency,
+  reportingExchangeRate,
+  reportingLoading,
   isFocused,
   isDimmed,
   onPress,
@@ -117,7 +124,12 @@ export default function AccountCard({
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.75}>
-              {formatCurrency(balance, DEFAULT_CURRENCY)}
+              {reportingLoading
+                ? '—'
+                : formatCurrency(
+                    toReportingAmount(balance, reportingExchangeRate),
+                    reportingCurrency,
+                  )}
             </Text>
           </View>
         </CardSurface>

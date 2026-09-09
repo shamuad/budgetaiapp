@@ -129,5 +129,11 @@ export interface Asset {
 export interface Profile {
   id: string;
   avatar_url: string | null;
+  // Currency used for cross-account totals and reports. Transactions retain
+  // their original currency and immutable conversion into canonical EUR.
+  reporting_currency: CurrencyCode;
+  // Latest persisted EUR -> reporting_currency multiplier.
+  reporting_exchange_rate: number;
+  reporting_rate_updated_at: string;
   updated_at: string;
 }

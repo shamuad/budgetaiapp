@@ -107,6 +107,8 @@ export default {
   settings: {
     title: 'Ayarlar',
     appearanceSection: 'Görünüm',
+    currencySection: 'Para birimi',
+    reportingCurrency: 'Raporlama para birimi',
     managementSection: 'Yönetim',
     sessionDataSection: 'Oturum ve Veriler',
     manageAccounts: 'Hesapları Yönet',

@@ -1,11 +1,16 @@
 import {
+  currencySymbol,
+  DEFAULT_CURRENCY,
   i18n,
   ThemePreference,
+  type CurrencyCode,
   useAuthStore,
   useDeleteAllTransactionsMutation,
+  useReportingCurrencyQuery,
   useTransactionsQuery,
+  useUpdateReportingCurrencyMutation,
 } from '@budgetaiapp/shared';
-import { ChevronRight, Folder, Wallet, X } from 'lucide-react-native';
+import { ChevronRight, CircleDollarSign, Folder, Wallet, X } from 'lucide-react-native';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -31,7 +36,9 @@ import { spacing, TOUCH_TARGET } from '../theme';
 import { useAppTheme, type ColorTokens } from '../theming';
 import ManageAccountsModal from './manage/ManageAccountsModal';
 import ManageCategoriesModal from './manage/ManageCategoriesModal';
+import PickerModal from './PickerModal';
 import SegmentedControl from './SegmentedControl';
+import { fetchExchangeRate, PICKABLE_CURRENCIES } from '../lib/exchangeRates';
 
 export type SettingsAnchor = {
   x: number;
@@ -52,7 +59,14 @@ const THEME_OPTIONS: { id: ThemePreference; label: () => string }[] = [
   { id: 'dark', label: () => i18n.t('profile.themeDark') },
 ];
 
-const FIGMA_SHEET_HEIGHT = 560;
+const FIGMA_SHEET_HEIGHT = 648;
+
+type CurrencyOption = { id: CurrencyCode; name: string; icon: string };
+const CURRENCY_OPTIONS: CurrencyOption[] = PICKABLE_CURRENCIES.map((currency) => ({
+  id: currency,
+  name: currency,
+  icon: currencySymbol(currency),
+}));
 
 /**
  * Dashboard settings sheet from Figma node 36:3. The header gear remains the
@@ -64,8 +78,10 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { transactions } = useTransactionsQuery();
   const clearDataMutation = useDeleteAllTransactionsMutation();
+  const reportingPreference = useReportingCurrencyQuery();
+  const updateReportingCurrency = useUpdateReportingCurrencyMutation();
   const signOut = useAuthStore((state) => state.signOut);
-  const [destination, setDestination] = useState<'accounts' | 'categories' | null>(null);
+  const [destination, setDestination] = useState<'accounts' | 'categories' | 'currency' | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const progress = useSharedValue(0);
   const insets = useSafeAreaInsets();
@@ -91,6 +107,20 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
   const close = () => {
     setDestination(null);
     onClose();
+  };
+
+  const selectReportingCurrency = async (option: CurrencyOption) => {
+    if (updateReportingCurrency.isPending) {
+      return;
+    }
+
+    try {
+      const exchangeRate = await fetchExchangeRate(DEFAULT_CURRENCY, option.id);
+      await updateReportingCurrency.mutateAsync({ currency: option.id, exchangeRate });
+      setDestination(null);
+    } catch (error) {
+      Alert.alert(i18n.t('common.errorTitle'), (error as Error).message);
+    }
   };
 
   const confirmClearData = () => {
@@ -186,6 +216,26 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
               style={styles.themeControl}
             />
 
+            <Text style={styles.sectionLabel}>{i18n.t('settings.currencySection')}</Text>
+            <View style={styles.group}>
+              <OptionRow
+                styles={styles}
+                icon={
+                  updateReportingCurrency.isPending ? (
+                    <ActivityIndicator size="small" color={colors.tint} />
+                  ) : (
+                    <CircleDollarSign color={colors.tint} size={20} strokeWidth={1.8} />
+                  )
+                }
+                label={i18n.t('settings.reportingCurrency')}
+                value={`${currencySymbol(reportingPreference.currency)} ${reportingPreference.currency}`}
+                onPress={() => setDestination('currency')}
+                showChevron
+                isDisabled={updateReportingCurrency.isPending}
+                isLast
+              />
+            </View>
+
             <Text style={styles.sectionLabel}>{i18n.t('settings.managementSection')}</Text>
             <View style={styles.group}>
               <OptionRow
@@ -235,6 +285,14 @@ export default function OptionsModal({ visible, onClose }: OptionsModalProps) {
         visible={destination === 'categories'}
         onClose={() => setDestination(null)}
       />
+      <PickerModal
+        visible={destination === 'currency'}
+        title={i18n.t('settings.reportingCurrency')}
+        items={CURRENCY_OPTIONS}
+        selectedId={reportingPreference.currency}
+        onSelect={(option) => void selectReportingCurrency(option)}
+        onClose={() => setDestination(null)}
+      />
     </>
   );
 }
@@ -250,6 +308,7 @@ type OptionRowProps = {
   isDisabled?: boolean;
   isLast?: boolean;
   showChevron?: boolean;
+  value?: string;
 };
 
 function OptionRow({
@@ -261,6 +320,7 @@ function OptionRow({
   isDisabled,
   isLast,
   showChevron,
+  value,
 }: OptionRowProps) {
   return (
     <TouchableOpacity
@@ -279,6 +339,7 @@ function OptionRow({
         ]}>
         {label}
       </Text>
+      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
       {showChevron ? <ChevronRight color={styles.chevronColor.color} size={18} strokeWidth={1.8} /> : null}
     </TouchableOpacity>
   );
@@ -382,6 +443,12 @@ function createStyles(colors: ColorTokens) {
     },
     rowLabelDestructive: {
       color: colors.dangerText,
+    },
+    rowValue: {
+      marginLeft: spacing.sm,
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textMuted,
     },
     chevronColor: {
       color: colors.textMuted,

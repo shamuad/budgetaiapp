@@ -6,7 +6,7 @@ import {
   type UseMutationOptions,
 } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import type { Asset } from '../types/database';
+import type { Asset, CurrencyCode } from '../types/database';
 
 import i18n from '../i18n';
 import {
@@ -40,12 +40,20 @@ import {
 } from '../lib/api/transactions';
 import { getAssetQuote, searchAssets } from '../lib/api/finance';
 import { calculateBalancesByAsset } from '../lib/ledgerBalances';
+import {
+  DEFAULT_REPORTING_CURRENCY_PREFERENCE,
+  fetchReportingCurrencyPreference,
+  updateReportingCurrencyPreference,
+  type ReportingCurrencyPreference,
+} from '../lib/api/reportingCurrency';
+import { useAuthStore } from '../store/useAuthStore';
 
 /** Stable cache keys shared by every consumer in the monorepo. */
 export const queryKeys = {
   transactions: ['transactions'] as const,
   assets: ['assets'] as const,
   categories: ['categories'] as const,
+  reportingCurrency: (userId: string | null) => ['reportingCurrency', userId] as const,
 };
 
 export function createQueryClient() {
@@ -139,6 +147,47 @@ export function useCategoriesQuery() {
     isLoading: query.isLoading,
     refresh: query.refetch,
   };
+}
+
+export function useReportingCurrencyQuery() {
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const query = useQuery({
+    queryKey: queryKeys.reportingCurrency(userId),
+    queryFn: () => fetchReportingCurrencyPreference(userId!),
+    enabled: Boolean(userId),
+  });
+  const preference = query.data ?? DEFAULT_REPORTING_CURRENCY_PREFERENCE;
+
+  return {
+    ...preference,
+    isLoading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : null,
+  };
+}
+
+export function useUpdateReportingCurrencyMutation(
+  options?: UseMutationOptions<
+    ReportingCurrencyPreference,
+    Error,
+    { currency: CurrencyCode; exchangeRate: number }
+  >,
+) {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+
+  return useMutation({
+    ...options,
+    mutationFn: ({ currency, exchangeRate }) => {
+      if (!userId) {
+        throw new Error(i18n.t('common.loadError'));
+      }
+      return updateReportingCurrencyPreference(userId, currency, exchangeRate);
+    },
+    onSuccess: async (preference, ...args) => {
+      queryClient.setQueryData(queryKeys.reportingCurrency(userId), preference);
+      await options?.onSuccess?.(preference, ...args);
+    },
+  });
 }
 
 const ASSET_SEARCH_DEBOUNCE_MS = 500;

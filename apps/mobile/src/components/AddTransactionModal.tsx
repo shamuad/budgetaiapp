@@ -19,6 +19,7 @@ import {
   parseAmountString,
   resolveCategoryName,
   toBaseAmount,
+  toReportingAmount,
   toISODate,
   TransactionInput,
   TransactionRow,
@@ -30,6 +31,7 @@ import {
   useCreateTransactionMutation,
   useCreateTransactionsBatchMutation,
   useTransactionsQuery,
+  useReportingCurrencyQuery,
   useUpdateTransactionMutation,
 } from '@budgetaiapp/shared';
 import DateTimePicker, { DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
@@ -301,6 +303,7 @@ export default function AddTransactionModal({
   transactionToEdit = null,
 }: AddTransactionModalProps) {
   const { colors, scheme } = useAppTheme();
+  const reportingPreference = useReportingCurrencyQuery();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -507,10 +510,17 @@ export default function AddTransactionModal({
   // A holding purchase is priced by its own fields; the hero input just mirrors it.
   const parsedAmount =
     isInvestmentPurchase && holdingTotal !== null ? holdingTotal : parseAmountString(amount);
-  const showBaseHint =
-    currency !== DEFAULT_CURRENCY && Number.isFinite(parsedAmount) && parsedAmount > 0;
-  const baseAmount =
-    showBaseHint && Number.isFinite(exchangeRate) ? toBaseAmount(parsedAmount, exchangeRate) : null;
+  const showReportingHint =
+    currency !== reportingPreference.currency &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount > 0;
+  const reportingAmount =
+    showReportingHint && Number.isFinite(exchangeRate)
+      ? toReportingAmount(
+          toBaseAmount(parsedAmount, exchangeRate),
+          reportingPreference.exchangeRate,
+        )
+      : null;
 
   /**
    * Soft, non-blocking heads-up when a spend or transfer would take the source
@@ -535,9 +545,20 @@ export default function AddTransactionModal({
 
     return i18n.t('addTransaction.insufficientBalance', {
       account: formatAssetLabel(selectedAsset),
-      amount: formatCurrency(currentBalance, DEFAULT_CURRENCY),
+      amount: formatCurrency(
+        toReportingAmount(currentBalance, reportingPreference.exchangeRate),
+        reportingPreference.currency,
+      ),
     });
-  }, [type, selectedAsset, parsedAmount, exchangeRate, balanceByAsset]);
+  }, [
+    type,
+    selectedAsset,
+    parsedAmount,
+    exchangeRate,
+    balanceByAsset,
+    reportingPreference.currency,
+    reportingPreference.exchangeRate,
+  ]);
 
   // The hero Amount field always mirrors the holding total, so what the user
   // sees at a glance and what gets saved can never drift apart.
@@ -1196,14 +1217,17 @@ export default function AddTransactionModal({
                     {i18n.t('addTransaction.calculatedFromHolding')}
                   </Text>
                 </View>
-              ) : currency !== DEFAULT_CURRENCY ? (
+              ) : showReportingHint ? (
                 <View style={styles.baseHint}>
                   {isRateLoading ? (
                     <Text style={styles.baseHintText}>{i18n.t('addTransaction.rateLoading')}</Text>
-                  ) : baseAmount !== null ? (
+                  ) : reportingAmount !== null ? (
                     <Text style={styles.baseHintText}>
                       {i18n.t('addTransaction.baseAmountHint', {
-                        amount: formatCurrency(baseAmount, DEFAULT_CURRENCY),
+                        amount: formatCurrency(
+                          reportingAmount,
+                          reportingPreference.currency,
+                        ),
                       })}
                     </Text>
                   ) : null}
@@ -1566,12 +1590,15 @@ export default function AddTransactionModal({
                   {formatCurrency(pendingDraft.amount, currency)}
                   {pendingDraft.category ? ` · ${resolveCategoryName(pendingDraft.category)}` : ''}
                 </Text>
-                {currency !== DEFAULT_CURRENCY && Number.isFinite(exchangeRate) ? (
+                {currency !== reportingPreference.currency && Number.isFinite(exchangeRate) ? (
                   <Text style={styles.confirmDate}>
                     {i18n.t('addTransaction.baseAmountHint', {
                       amount: formatCurrency(
-                        toBaseAmount(pendingDraft.amount, exchangeRate),
-                        DEFAULT_CURRENCY,
+                        toReportingAmount(
+                          toBaseAmount(pendingDraft.amount, exchangeRate),
+                          reportingPreference.exchangeRate,
+                        ),
+                        reportingPreference.currency,
                       ),
                     })}
                   </Text>

@@ -76,6 +76,6 @@ The repeatable CI result is authoritative; recorded test counts describe this br
 
 - `AddTransactionModal` and several analytics/management components are oversized.
 - The full ledger is fetched and aggregated on the client.
-- User base currency remains fixed to EUR.
+- Canonical ledger conversion remains EUR by design; the user can select a separate reporting currency for Dashboard and Analytics totals.
 - The visible web page remains a framework starter.
 - Merged topic branches remain on the remote and can be cleaned up separately; cleanup is not the active task.

@@ -43,6 +43,8 @@ export default {
   settings: {
     title: 'Instellingen',
     appearanceSection: 'Weergave',
+    currencySection: 'Valuta',
+    reportingCurrency: 'Rapportagevaluta',
     managementSection: 'Beheer',
     sessionDataSection: 'Sessie en gegevens',
     manageAccounts: 'Rekeningen beheren',

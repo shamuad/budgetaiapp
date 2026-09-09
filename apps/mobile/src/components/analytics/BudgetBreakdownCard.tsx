@@ -4,9 +4,10 @@ import {
   BudgetBreakdown,
   budgetGroupLabel,
   BudgetGroup,
-  DEFAULT_CURRENCY,
+  type CurrencyCode,
   formatCurrency,
   i18n,
+  toReportingAmount,
 } from '@budgetaiapp/shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +17,8 @@ import { useAppTheme, type ColorTokens } from '../../theming';
 
 type BudgetBreakdownCardProps = {
   breakdown: BudgetBreakdown;
+  reportingCurrency: CurrencyCode;
+  reportingExchangeRate: number;
 };
 
 type CardStyles = ReturnType<typeof createStyles>;
@@ -27,7 +30,11 @@ const ROW_GROUPS: BudgetGroup[] = ['needs', 'wants', 'savings'];
  * on Needs and Wants, and saved (via transfers into an investment account —
  * see `calculateBudgetBreakdown`), each against its target.
  */
-export default function BudgetBreakdownCard({ breakdown }: BudgetBreakdownCardProps) {
+export default function BudgetBreakdownCard({
+  breakdown,
+  reportingCurrency,
+  reportingExchangeRate,
+}: BudgetBreakdownCardProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -45,6 +52,8 @@ export default function BudgetBreakdownCard({ breakdown }: BudgetBreakdownCardPr
               group={group}
               amount={breakdown[group]}
               share={breakdown[`${group}Share`]}
+              reportingCurrency={reportingCurrency}
+              reportingExchangeRate={reportingExchangeRate}
               styles={styles}
             />
           ))}
@@ -59,11 +68,15 @@ function BudgetGroupRow({
   amount,
   share,
   styles,
+  reportingCurrency,
+  reportingExchangeRate,
 }: {
   group: BudgetGroup;
   amount: number;
   share: number;
   styles: CardStyles;
+  reportingCurrency: CurrencyCode;
+  reportingExchangeRate: number;
 }) {
   const width = useRef(new Animated.Value(0)).current;
   const tone = BUDGET_GROUP_TONE[group];
@@ -103,7 +116,12 @@ function BudgetGroupRow({
       </View>
 
       <View style={styles.rowFooter}>
-        <Text style={styles.rowAmount}>{formatCurrency(amount, DEFAULT_CURRENCY)}</Text>
+        <Text style={styles.rowAmount}>
+          {formatCurrency(
+            toReportingAmount(amount, reportingExchangeRate),
+            reportingCurrency,
+          )}
+        </Text>
         <Text style={styles.rowTarget}>{i18n.t('analytics.budgetTarget', { percent: targetPercent })}</Text>
       </View>
     </View>

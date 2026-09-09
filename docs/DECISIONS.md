@@ -90,7 +90,11 @@ Dashboard monthly income, expense and category spending use the stored exchange 
 
 ### 2026-09-08 — Settings opens as the approved bottom sheet
 
-The Dashboard's upper-right settings control opens the 560-point Figma bottom sheet rather than the legacy anchored popover. Appearance uses the same filled segmented control as New Transaction. Manage Accounts and Manage Categories remain first-class destinations and preserve their existing behavior; sign-out and transaction-data clearing remain separate, confirmed actions. The sheet adapts to the safe area and to Light, Dark B and system appearance.
+The Dashboard's upper-right settings control opens the approved adaptive bottom sheet rather than the legacy anchored popover. Appearance uses the same filled segmented control as New Transaction. Manage Accounts and Manage Categories remain first-class destinations and preserve their existing behavior; sign-out and transaction-data clearing remain separate, confirmed actions. The sheet adapts to the safe area and to Light, Dark B and system appearance.
+
+### 2026-09-09 — Reporting currency is separate from historical transaction currency
+
+Settings owns one persisted reporting-currency preference for cross-account figures. Transactions retain their entered currency and immutable conversion into canonical EUR; changing the preference never rewrites history. Dashboard, account-card balances, monthly summaries, Analytics charts and Analytics ledgers convert canonical totals with the persisted EUR-to-reporting-currency rate. Individual transaction rows continue to show the original entered currency. The selected rate is saved with its timestamp so a later refresh policy can update it deliberately.
 
 ### 2026-09-07 — Management validation and account-editor adaptation
 
@@ -98,7 +102,6 @@ Validate category lifecycle and account-order persistence with disposable local-
 
 ## Decisions still required
 
-- User-configurable base currency and historical conversion behavior.
 - Privacy/retention policy for AI-submitted voice and receipt data.
 - Notification product/privacy policy before notifications are promoted from backlog.
 - Repository branch-protection/ruleset configuration.

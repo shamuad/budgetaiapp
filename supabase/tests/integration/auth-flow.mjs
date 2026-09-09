@@ -89,11 +89,27 @@ try {
 
   const { data: profile, error: profileError } = await userA.authClient
     .from('profiles')
-    .select('id')
+    .select('id, reporting_currency, reporting_exchange_rate')
     .single();
   assertNoError(profileError, 'read profile for user A');
   assert.equal(profile.id, userA.user.id);
+  assert.equal(profile.reporting_currency, 'EUR');
+  assert.equal(Number(profile.reporting_exchange_rate), 1);
   assert.equal(userA.user.user_metadata.name, 'Auth User A');
+
+  const { error: reportingCurrencyError } = await userA.authClient
+    .from('profiles')
+    .update({ reporting_currency: 'TRY', reporting_exchange_rate: 35.5 })
+    .eq('id', userA.user.id);
+  assertNoError(reportingCurrencyError, 'save user A reporting currency');
+
+  const { data: updatedProfile, error: updatedProfileError } = await userA.authClient
+    .from('profiles')
+    .select('reporting_currency, reporting_exchange_rate')
+    .single();
+  assertNoError(updatedProfileError, 'reload user A reporting currency');
+  assert.equal(updatedProfile.reporting_currency, 'TRY');
+  assert.equal(Number(updatedProfile.reporting_exchange_rate), 35.5);
 
   const assetInput = {
     symbol: 'EUR',

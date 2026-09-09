@@ -43,6 +43,8 @@ export default {
   settings: {
     title: 'Ajustes',
     appearanceSection: 'Apariencia',
+    currencySection: 'Moneda',
+    reportingCurrency: 'Moneda de informe',
     managementSection: 'Gestión',
     sessionDataSection: 'Sesión y datos',
     manageAccounts: 'Gestionar cuentas',
