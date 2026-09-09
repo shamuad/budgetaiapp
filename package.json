@@ -22,7 +22,8 @@
     "test:db": "supabase test db",
     "verify:db": "npm run db:reset && npm run test:db",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test:integration:management": "tsx supabase/tests/integration/management-flow.ts"
   },
   "overrides": {
     "react-native-worklets": "0.10.1"

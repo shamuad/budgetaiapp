@@ -68,6 +68,26 @@ Money moved between the user's own accounts or into an investment account is nei
 
 Supabase-backed data uses TanStack Query. Zustand is reserved for authentication projection, theme preference and small client-only UI state.
 
+### 2026-09-07 — Incremental implementation after the category pass
+
+The product owner authorized moving toward a running app after categories, then iterating on design. Retain the existing repository, authentication, Supabase, business rules and tests. This does not mark every screen or D3–D7 complete. First delivery is D2 palette, filled shared selection and category-list styling on a topic branch, followed by native review and explicit PR approval.
+
+### 2026-09-07 — Preserve existing management behavior
+
+Account colors and gradients remain chosen in account editing; Dashboard account selection filters calculations in place. Account drag ordering and bank identity remain. Categories retain alphabetical grouping, income/expense distinction, needs/wants for expenses, emoji/reset behavior, default hide/restore and guarded deletion of custom categories. Category lists do not acquire account-style drag ordering. Settings retains Manage Accounts and Manage Categories.
+
+### 2026-09-07 — Light and Dark B roles
+
+Dark B uses background `#1B1D22`, surface `#2C2F36` and border `#454953`. Readable interaction accent is `#B6A7FF`; filled actions remain `#5842D8` with white text in both themes. Income and expense retain separate semantic colors. All shared segmented selections use the filled violet treatment; amounts retain their financial direction colors. Account-defined colors and the existing Budgree/AI role are separate.
+
+### 2026-09-07 — Future ideas remain explicit backlog
+
+Family sharing and a full AI Assistant are parked. The approved Assistant navigation icon is a visual placeholder, not evidence of an implemented assistant. These ideas do not expand the current implementation slice. Written GitHub records and approved Figma are the handoff; conversations are not assumed to synchronize automatically.
+
+### 2026-09-07 — Management validation and account-editor adaptation
+
+Validate category lifecycle and account-order persistence with disposable local-Supabase users in CI, never by altering the owner's financial records. Keep native gesture/confirmation evidence separate from API persistence tests. Preserve every existing account field even where the Figma reference omits it. Four-choice selectors use two columns to keep labels readable while retaining the shared filled selection style.
+
 ## Decisions still required
 
 - User-configurable base currency and historical conversion behavior.

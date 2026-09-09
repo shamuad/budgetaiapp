@@ -201,7 +201,7 @@ function createStyles(colors: ColorTokens) {
     infoText: {
       fontSize: 14,
       fontWeight: '600',
-      color: colors.brand,
+      color: colors.tint,
       textAlign: 'center',
     },
     field: {

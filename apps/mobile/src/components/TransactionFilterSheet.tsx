@@ -358,7 +358,7 @@ function DateField({
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress}
-      style={[styles.dateField, isActive && { borderColor: colors.brand }]}>
+      style={[styles.dateField, isActive && { borderColor: colors.tint }]}>
       <Calendar color={colors.textMuted} size={16} />
       <View style={styles.dateFieldTexts}>
         <Text style={styles.dateFieldLabel}>{label}</Text>

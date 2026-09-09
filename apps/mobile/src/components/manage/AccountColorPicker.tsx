@@ -211,8 +211,8 @@ function createStyles(colors: ColorTokens) {
       marginTop: spacing.xs,
     },
     previewCard: {
-      aspectRatio: 200 / 126,
-      borderRadius: 18,
+      aspectRatio: 321 / 154,
+      borderRadius: 22,
       padding: spacing.lg,
       justifyContent: 'space-between',
       borderWidth: StyleSheet.hairlineWidth,

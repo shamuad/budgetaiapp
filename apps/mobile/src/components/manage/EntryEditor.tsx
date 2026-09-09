@@ -166,8 +166,8 @@ export default function EntryEditor<T extends string>({
     custom_color: draftCustomColor,
   });
 
-  const previewLogoColor =
-    draftCustomColor ?? detectedBrand?.color ?? previewCardColor;
+  // Serialized gradients are not React Native colors; use their resolved first stop.
+  const previewLogoColor = previewCardColor;
 
   const previewOpacity = useRef(new Animated.Value(1)).current;
   const previewScale = useRef(new Animated.Value(1)).current;
@@ -311,11 +311,13 @@ export default function EntryEditor<T extends string>({
   return (
     <>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onCancel} style={styles.headerSide} disabled={isSaving}>
+        <TouchableOpacity accessibilityRole="button" onPress={onCancel} style={styles.headerSide} disabled={isSaving}>
           <Text style={styles.headerAction}>{i18n.t('addTransaction.cancel')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{title}</Text>
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isSaving, busy: isSaving }}
           onPress={handleSave}
           style={[styles.headerSide, styles.headerSideEnd]}
           disabled={isSaving}>
@@ -332,7 +334,7 @@ export default function EntryEditor<T extends string>({
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.content, enableBrandDetect && styles.accountContent]} keyboardShouldPersistTaps="handled">
           <Animated.View
             style={[
               styles.previewWrap,
@@ -380,7 +382,7 @@ export default function EntryEditor<T extends string>({
                 {i18n.t('manage.brandDetected', { name: detectedBrand!.name })}
               </Text>
               <Text style={styles.brandHint}>{i18n.t('manage.brandDetectedHint')}</Text>
-              <TouchableOpacity activeOpacity={0.6} onPress={handleUseCustomIcon}>
+              <TouchableOpacity accessibilityRole="button" activeOpacity={0.6} onPress={handleUseCustomIcon}>
                 <Text style={styles.brandLink}>{i18n.t('manage.useCustomIcon')}</Text>
               </TouchableOpacity>
             </View>
@@ -398,6 +400,9 @@ export default function EntryEditor<T extends string>({
                 {iconChoices.map((choice) => (
                   <TouchableOpacity
                     key={choice}
+                    accessibilityRole="button"
+                    accessibilityLabel={choice}
+                    accessibilityState={{ selected: choice === icon }}
                     activeOpacity={0.6}
                     onPress={() => handleManualIconPick(choice)}
                     style={[styles.iconChip, choice === icon && styles.iconChipSelected]}>
@@ -408,7 +413,7 @@ export default function EntryEditor<T extends string>({
             </>
           )}
 
-          <View style={styles.card}>
+          <View style={[styles.card, enableBrandDetect && styles.accountCard]}>
             <View style={styles.row}>
               <Text style={styles.rowLabel}>{i18n.t('manage.name')}</Text>
               <TextInput
@@ -570,6 +575,16 @@ function createStyles(colors: ColorTokens) {
       padding: spacing.lg,
       gap: spacing.lg,
     },
+    accountContent: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      gap: 16,
+    },
+    accountCard: {
+      borderRadius: 24,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
     previewWrap: {
       alignSelf: 'center',
     },
@@ -583,9 +598,9 @@ function createStyles(colors: ColorTokens) {
       borderRadius: 44,
     },
     brandCircle: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
+      width: 92,
+      height: 92,
+      borderRadius: 46,
       alignItems: 'center',
       justifyContent: 'center',
       shadowColor: colors.shadow,

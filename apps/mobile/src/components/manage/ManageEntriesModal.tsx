@@ -133,7 +133,7 @@ function EntryRowBase<T extends string>({
           accessibilityLabel={i18n.t('manage.reorderHandle')}
           accessibilityHint={i18n.t('manage.reorderHint')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <GripVertical color={isActive ? colors.tint : colors.placeholderFaint} size={20} />
+          <GripVertical color={isActive ? colors.tint : colors.textMuted} size={20} />
         </TouchableOpacity>
       )}
     </View>

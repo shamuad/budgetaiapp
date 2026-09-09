@@ -45,20 +45,21 @@ Figma is authoritative for approved design.
 
 - [x] D0 — Figma file structure and working conventions.
 - [x] D1 — Visual Direction: premium adaptive fintech, clear hierarchy, polished card structures, restrained glass surfaces and semantic color roles.
-- [ ] D2 — Color System: approve primitives and semantic Light/Dark tokens, including distinct brand, Budgree/AI and financial-direction roles.
+- [x] D2 — Light / Dark B visual palette accepted by the product owner; first semantic token implementation is under review. Distinct interaction, filled action, Budgree/AI and financial roles remain.
 - [ ] D3 — Typography system.
 - [ ] D4 — Spacing, grid, radius, elevation and icon rules.
 - [ ] D5 — Core components and interaction states.
 - [ ] D6 — Critical mobile flows and clickable prototype.
 - [ ] D7 — Developer handoff and design QA.
 
-Only one design stage is active at a time. Implementation must not pre-empt unapproved Figma decisions.
+The product owner authorized incremental implementation after the category pass (2026-09-06/07). Use accepted direction and preserve existing behavior; D3–D7 are not globally complete. Review remaining design details on working screens and keep one active delivery task. See `MOBILE_DESIGN_HANDOFF.md`.
 
 ## M1 — Mobile alpha stabilization
 
 - [x] Verify auth lifecycle against local Supabase.
 - [x] Verify authenticated voice and receipt data through the local Edge Function with a deterministic Gemini fixture.
 - [x] Verify transfers, investments, installments and credit-card cycles through shared calculations and local-Supabase API integration.
+- [x] Verify category lifecycle and account-order persistence using disposable local-Supabase users in CI (PR #8 branch evidence; not yet merged). Native gesture/confirmation acceptance remains separate.
 - [ ] Validate camera/microphone permissions and live Gemini accuracy on physical iOS and Android devices.
 - [ ] Exercise financial lifecycle flows through native mobile screens on physical devices.
 - [ ] Add privacy-safe mobile diagnostics and error monitoring.

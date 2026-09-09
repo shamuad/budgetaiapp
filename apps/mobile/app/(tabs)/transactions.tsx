@@ -149,7 +149,7 @@ export default function TransactionsScreen() {
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="small" color={colors.brand} />
+        <ActivityIndicator size="small" color={colors.tint} />
       </View>
     );
   }
@@ -306,7 +306,7 @@ function createStyles(colors: ColorTokens) {
       borderBottomColor: 'transparent',
     },
     pillActive: {
-      borderBottomColor: colors.brand,
+      borderBottomColor: colors.tint,
     },
     pillLabel: {
       fontSize: 13,
@@ -314,7 +314,7 @@ function createStyles(colors: ColorTokens) {
       color: colors.textMuted,
     },
     pillLabelActive: {
-      color: colors.brand,
+      color: colors.tint,
     },
     filterButton: {
       width: TOUCH_TARGET - 4,

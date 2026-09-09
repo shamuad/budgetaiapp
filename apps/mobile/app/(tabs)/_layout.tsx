@@ -29,7 +29,7 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: colors.brand,
+          tabBarActiveTintColor: colors.tint,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarLabelStyle: styles.tabLabel,
           tabBarItemStyle: styles.tabItem,
