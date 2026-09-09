@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(21);
 
 select ok(to_regclass('public.assets') is not null, 'assets table exists');
 select ok(to_regclass('public.categories') is not null, 'categories table exists');
@@ -43,6 +43,27 @@ select ok(
     where table_schema = 'public' and table_name = 'assets' and column_name = 'statement_day'
   ),
   'assets has a credit statement cutoff'
+);
+select ok(
+  exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles' and column_name = 'reporting_currency'
+  ),
+  'profiles has a reporting currency'
+);
+select ok(
+  exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_reporting_currency_check'
+  ),
+  'reporting currency is constrained to supported currencies'
+);
+select ok(
+  exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_reporting_exchange_rate_check'
+  ),
+  'reporting exchange rate must stay positive'
 );
 
 select ok(

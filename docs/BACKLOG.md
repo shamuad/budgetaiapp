@@ -23,7 +23,7 @@ This file is the intake queue for work that is not currently active. `ROADMAP.md
 | Planned transactions and cash-flow projections | Candidate | Anticipatory budgeting | Recurrence model, forecast UX, server aggregates | Post-beta |
 | Bank integrations and recurring-payment detection | Parked | Less manual entry | Provider/legal/privacy selection, reconciliation model | Post-launch |
 | Advanced investment analytics | Parked | Deeper portfolio insight | Market-data policy, valuation model, regulatory wording | Post-launch |
-| User-configurable base currency with historical conversion rules | Candidate | Correct international use | Product decision, migration design, analytics impact | M2 Maintainability |
+| Automatic refresh policy for persisted reporting exchange rates | Candidate | Keep reporting totals current between explicit preference changes | Rate staleness policy, network retry UX | M2 Maintainability |
 | Accessibility audit and remediation | Candidate | Inclusive, higher-quality product | D5/D6 components and test plan | Beta |
 
 ## Backend, data and security

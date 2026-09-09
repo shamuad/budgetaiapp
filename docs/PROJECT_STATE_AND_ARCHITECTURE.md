@@ -48,7 +48,7 @@ The hosted core DDL was captured from metadata as the first migration. Every mig
 - Zustand owns authentication projection, theme preference and small client-only UI state.
 - Shared Supabase API modules own CRUD queries.
 - Query keys are shared centrally.
-- Transactions retain the original currency and a fixed exchange rate into the current EUR base currency.
+- Transactions retain the original currency and a fixed exchange rate into canonical EUR. A profile-level reporting preference converts cross-account Dashboard and Analytics totals without rewriting historical rows.
 - Transfers move value between a source and destination account without becoming income or expense.
 - Installment plans allocate integer cents so their rows reproduce the original total.
 - Credit-card transactions retain statement-month snapshots.

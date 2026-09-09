@@ -75,7 +75,7 @@ The remaining M1 work may be prepared while the design system progresses only wh
 - [ ] Split oversized transaction, analytics and management components without behavior changes.
 - [ ] Add component/integration coverage around transaction entry.
 - [ ] Define and implement pagination/server-aggregate thresholds.
-- [ ] Implement the approved base-currency preference and migration policy.
+- [x] Implement reporting-currency preference while preserving canonical EUR history.
 - [ ] Complete accessibility, regression, privacy/security and preview-build gates.
 
 ## M3 — Web product

@@ -107,6 +107,8 @@ export default {
   settings: {
     title: 'Settings',
     appearanceSection: 'Appearance',
+    currencySection: 'Currency',
+    reportingCurrency: 'Reporting currency',
     managementSection: 'Management',
     sessionDataSection: 'Session & Data',
     manageAccounts: 'Manage Accounts',

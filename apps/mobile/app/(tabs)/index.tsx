@@ -1,5 +1,4 @@
 import {
-  DEFAULT_CURRENCY,
   formatAssetLabel,
   formatDate,
   formatCurrency,
@@ -7,9 +6,11 @@ import {
   i18n,
   TransactionRow,
   summarizeDashboard,
+  toReportingAmount,
   toISODate,
   useAppStore,
   useAssets,
+  useReportingCurrencyQuery,
   useTransactions,
 } from '@budgetaiapp/shared';
 import { router, useFocusEffect } from 'expo-router';
@@ -115,6 +116,7 @@ export default function DashboardScreen() {
     },
   });
   const { assets, isLoading: assetsLoading } = useAssets();
+  const reportingPreference = useReportingCurrencyQuery();
   const selectedAssetId = useAppStore((state) => state.selectedAssetId);
   const toggleSelectedAsset = useAppStore((state) => state.toggleSelectedAsset);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -302,11 +304,16 @@ export default function DashboardScreen() {
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.6}>
-            {isLoading || assetsLoading || error ? '—' : formatCurrency(headlineBalance, DEFAULT_CURRENCY)}
+            {isLoading || assetsLoading || reportingPreference.isLoading || error
+              ? '—'
+              : formatCurrency(
+                  toReportingAmount(headlineBalance, reportingPreference.exchangeRate),
+                  reportingPreference.currency,
+                )}
           </Text>
           <View style={styles.heroFoot}>
             <Text style={styles.heroPeriod}>{formatPeriodLabel('month', anchor)}</Text>
-            <Text style={[styles.heroNet, { color: summary.net < 0 ? colors.expense : colors.income }]}>{isLoading || error ? '—' : `${summary.net > 0 ? '+' : ''}${formatCurrency(summary.net, DEFAULT_CURRENCY)}`} · {i18n.t('dashboardDesign.month')}</Text>
+            <Text style={[styles.heroNet, { color: summary.net < 0 ? colors.expense : colors.income }]}>{isLoading || error ? '—' : `${summary.net > 0 ? '+' : ''}${formatCurrency(toReportingAmount(summary.net, reportingPreference.exchangeRate), reportingPreference.currency)}`} · {i18n.t('dashboardDesign.month')}</Text>
           </View>
           </Animated.View>
         </View>
@@ -342,6 +349,9 @@ export default function DashboardScreen() {
                     <AccountCard
                       asset={asset}
                       balance={balanceByAsset.get(asset.id) ?? 0}
+                      reportingCurrency={reportingPreference.currency}
+                      reportingExchangeRate={reportingPreference.exchangeRate}
+                      reportingLoading={reportingPreference.isLoading}
                       isFocused={selectedAssetId === asset.id}
                       isDimmed={selectedAssetId !== null && selectedAssetId !== asset.id}
                       onPress={() => toggleAsset(asset.id)}
@@ -375,7 +385,15 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        <DashboardSummary summary={summary} scope={scope} loading={isLoading || assetsLoading} error={error} onAnalysis={handleAnalysis} />
+        <DashboardSummary
+          summary={summary}
+          scope={scope}
+          loading={isLoading || assetsLoading || reportingPreference.isLoading}
+          error={error}
+          reportingCurrency={reportingPreference.currency}
+          reportingExchangeRate={reportingPreference.exchangeRate}
+          onAnalysis={handleAnalysis}
+        />
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{i18n.t('dashboard.recentActivity')}</Text>
