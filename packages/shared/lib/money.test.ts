@@ -59,19 +59,24 @@ describe('localeNumberParts', () => {
   });
 });
 
-describe('formatCurrency', () => {
+  describe('formatCurrency', () => {
   it('formats with grouping and two decimals', () => {
     assert.match(formatCurrency(6873.51, 'EUR', 'en-US'), /6,873\.51/);
     assert.match(formatCurrency(6873.51, 'EUR', 'nl-NL'), /6\.873,51/);
   });
 
-  it('honours device separators even when the locale tag is en-US', () => {
+    it('honours device separators even when the locale tag is en-US', () => {
     assert.match(
       formatCurrency(6234.55, 'EUR', 'en-US', { locale: 'en-US', group: '.', decimal: ',' }),
       /6\.234,55/,
     );
+    });
+
+    it('uses the Turkish lira symbol consistently across ICU implementations', () => {
+      assert.equal(formatCurrency(35, 'TRY', 'en-US'), '₺35.00');
+      assert.equal(formatCurrency(35, 'TRY', 'tr-TR'), '₺35,00');
+    });
   });
-});
 
 describe('formatAmountForInput', () => {
   it('groups thousands and strips trailing zeros', () => {
