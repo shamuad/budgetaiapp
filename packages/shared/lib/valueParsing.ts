@@ -79,3 +79,8 @@ export function parseAIAmount(value: unknown): number {
 
   return NaN;
 }
+
+/** Statement-month semantics shared by Dashboard, Analytics and transaction filters. */
+export function transactionPeriodDate(row: { billing_month: string | null; date: string }) {
+  return fromISODate(row.billing_month ?? row.date);
+}

@@ -1,6 +1,6 @@
 import { getUserAvatarUrl, i18n, useAuthStore } from '@budgetaiapp/shared';
 import { router } from 'expo-router';
-import { Plus, Settings } from 'lucide-react-native';
+import { Settings } from 'lucide-react-native';
 import { useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,18 +11,18 @@ import { InitialAvatar } from './InitialAvatar';
 import type { SettingsAnchor } from './OptionsModal';
 
 type TopHeaderProps = {
-  onAddPress: () => void;
+  hero?: boolean;
   onSettingsPress: (anchor: SettingsAnchor) => void;
 };
 
 /**
- * Global chrome above the tab screens: identity on the left, add + settings
+ * Global chrome above the tab screens: identity on the left, settings
  * on the right. The avatar and greeting both open Profile — photo changes
  * happen on that screen, not from the dashboard header.
  */
-export default function TopHeader({ onAddPress, onSettingsPress }: TopHeaderProps) {
+export default function TopHeader({ hero = false, onSettingsPress }: TopHeaderProps) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, hero), [colors, hero]);
   const settingsRef = useRef<View>(null);
   const user = useAuthStore((state) => state.user);
   const avatarUri = getUserAvatarUrl(user);
@@ -30,7 +30,9 @@ export default function TopHeader({ onAddPress, onSettingsPress }: TopHeaderProp
   const metadataName = typeof user?.user_metadata?.name === 'string' ? user.user_metadata.name.trim() : '';
   const displayName = metadataName || user?.email || '';
   const name = firstName(displayName) || i18n.t('profile.namePlaceholder');
-  const greeting = i18n.t(`header.${greetingKey()}`, { name });
+  const greeting = hero
+    ? i18n.t('dashboardDesign.greeting', { name })
+    : i18n.t(`header.${greetingKey()}`, { name });
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -41,22 +43,15 @@ export default function TopHeader({ onAddPress, onSettingsPress }: TopHeaderProp
           accessibilityRole="button"
           accessibilityLabel={i18n.t('tabs.profile')}>
           <View style={styles.avatarHit}>
-            <InitialAvatar name={name} size={40} uri={avatarUri} />
+            <InitialAvatar name={name} size={hero ? 48 : 40} uri={avatarUri} />
           </View>
-          <Text style={styles.greeting} numberOfLines={1}>
-            {greeting}
-          </Text>
+          <View style={styles.identityText}>
+            <Text style={styles.greeting} numberOfLines={2}>{greeting}</Text>
+            {hero && <Text style={styles.subtitle}>{i18n.t('dashboardDesign.subtitle')}</Text>}
+          </View>
         </Pressable>
 
         <View style={styles.actions}>
-          <Pressable
-            style={styles.addButton}
-            onPress={onAddPress}
-            hitSlop={4}
-            accessibilityRole="button"
-            accessibilityLabel={i18n.t('addTransaction.title')}>
-            <Plus color={colors.onBrand} size={24} strokeWidth={2.5} />
-          </Pressable>
           <View ref={settingsRef} collapsable={false}>
             <Pressable
               style={styles.iconButton}
@@ -68,7 +63,7 @@ export default function TopHeader({ onAddPress, onSettingsPress }: TopHeaderProp
               hitSlop={4}
               accessibilityRole="button"
               accessibilityLabel={i18n.t('settings.title')}>
-              <Settings color={colors.text} size={20} strokeWidth={2} />
+              <Settings color={hero ? colors.onBrand : colors.text} size={22} strokeWidth={2} />
             </Pressable>
           </View>
         </View>
@@ -105,19 +100,19 @@ function firstName(value: string) {
   return trimmed.split(/\s+/)[0] ?? '';
 }
 
-function createStyles(colors: ColorTokens) {
+function createStyles(colors: ColorTokens, hero: boolean) {
   return StyleSheet.create({
     safe: {
-      backgroundColor: colors.background,
+      backgroundColor: hero ? 'transparent' : colors.background,
     },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: spacing.md,
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: 24,
       paddingTop: spacing.sm,
-      paddingBottom: spacing.sm,
+      paddingBottom: hero ? 24 : spacing.sm,
     },
     identity: {
       flex: 1,
@@ -127,35 +122,23 @@ function createStyles(colors: ColorTokens) {
       minHeight: TOUCH_TARGET,
     },
     avatarHit: {
-      width: TOUCH_TARGET,
-      height: TOUCH_TARGET,
+      width: hero ? 48 : TOUCH_TARGET,
+      height: hero ? 48 : TOUCH_TARGET,
       alignItems: 'center',
       justifyContent: 'center',
     },
+    identityText: { flex: 1, gap: 2 },
     greeting: {
-      flex: 1,
-      fontSize: 15,
-      fontWeight: '500',
+      fontSize: hero ? 21 : 15,
+      fontWeight: '700',
       letterSpacing: -0.2,
-      color: colors.textMuted,
+      color: hero ? colors.onBrand : colors.text,
     },
+    subtitle: { fontSize: 13, lineHeight: 18, color: colors.onMastheadMuted },
     actions: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-    },
-    addButton: {
-      width: TOUCH_TARGET,
-      height: TOUCH_TARGET,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: TOUCH_TARGET / 2,
-      backgroundColor: colors.brand,
-      shadowColor: colors.brand,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
-      elevation: 5,
     },
     iconButton: {
       width: TOUCH_TARGET,
@@ -163,7 +146,7 @@ function createStyles(colors: ColorTokens) {
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: TOUCH_TARGET / 2,
-      backgroundColor: colors.surfaceElevated,
+      backgroundColor: hero ? 'rgba(255,255,255,0.14)' : colors.surfaceElevated,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderGlass,
     },

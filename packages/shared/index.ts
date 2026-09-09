@@ -27,3 +27,4 @@ export * from './utils/defaultCategories';
 export * from './utils/budgetBreakdown';
 export * from './utils/billingMonth';
 export * from './utils/colorSpace';
+export * from './lib/dashboardSummary';

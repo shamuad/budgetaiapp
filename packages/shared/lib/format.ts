@@ -53,9 +53,7 @@ export function amountCursorAfterMask(
  * and expense snapshot a billing month at write time; everything else uses
  * the purchase day.
  */
-export function transactionPeriodDate(row: { billing_month: string | null; date: string }) {
-  return fromISODate(row.billing_month ?? row.date);
-}
+export { transactionPeriodDate } from './valueParsing';
 
 type DateInput = Date | string;
 
