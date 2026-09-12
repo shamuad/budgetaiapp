@@ -105,3 +105,7 @@ Validate category lifecycle and account-order persistence with disposable local-
 - Privacy/retention policy for AI-submitted voice and receipt data.
 - Notification product/privacy policy before notifications are promoted from backlog.
 - Repository branch-protection/ruleset configuration.
+
+### 2026-09-12 — Approved welcome/auth flow moves to mobile implementation
+
+The product owner authorized the approved Figma auth composition for code implementation. The single active task is welcome/authentication on `feat/auth-redesign`, from current main. Use the approved outlined logo, dark welcome, mint/light forms, right-hand password eye and final safe-area spacing. Supabase remains the auth provider; Magic Link is for existing accounts, signup collects email/password, and Google/Apple use system-browser OAuth. Hosted configuration and native validation are completion gates, separate from code implementation. See [AUTH_REDESIGN.md](AUTH_REDESIGN.md). The existing ledger theme and financial behavior stay outside this delivery. Merge still requires explicit user approval.

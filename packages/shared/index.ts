@@ -1,6 +1,7 @@
 export { default as i18n } from './i18n';
 export { getSupabase } from './lib/supabase';
 export * from './lib/authLinks';
+export * from './lib/authFlow';
 export * from './lib/authSession';
 export * from './lib/aiResponse';
 export * from './lib/installmentPlan';

@@ -9,6 +9,10 @@ import {
   ThemeProvider as NavigationThemeProvider,
 } from 'expo-router/react-navigation';
 import { useMemo } from 'react';
+import { useFonts } from 'expo-font';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -28,7 +32,8 @@ function RootStack() {
   // still needs to set a new password — keep them on the `(auth)` group
   // until that's done instead of jumping straight to the main app.
   const isPasswordRecovery = useAuthStore((state) => state.isPasswordRecovery);
-  const showTabs = !!session && !isPasswordRecovery;
+  const authLinkStatus = useAuthStore((state) => state.authLinkStatus);
+  const showTabs = !!session && !isPasswordRecovery && authLinkStatus !== 'processing';
 
   // Expo Router's own navigator theme defaults to a light `rgb(242, 242, 242)`
   // canvas until overridden. Left as-is, that default paints behind screen
@@ -60,7 +65,8 @@ function RootStack() {
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: colors.background,
-            }}>
+            }}
+          >
             <ActivityIndicator size="large" color={colors.tint} />
           </View>
         ) : (
@@ -70,7 +76,8 @@ function RootStack() {
               headerTintColor: colors.text,
               headerTitleStyle: { color: colors.text },
               contentStyle: { backgroundColor: colors.background },
-            }}>
+            }}
+          >
             {/* Whichever branch's guard is false is inaccessible — Expo Router
                 redirects there automatically, including when `session` changes
                 after the app is already showing one side (e.g. on log out). */}
@@ -88,6 +95,7 @@ function RootStack() {
             <Stack.Protected guard={!showTabs}>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             </Stack.Protected>
+            <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
           </Stack>
         )}
       </NavigationThemeProvider>
@@ -96,6 +104,13 @@ function RootStack() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
+  if (!fontsLoaded && !fontError)
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A100E', justifyContent: 'center' }}>
+        <ActivityIndicator color="#8ECFA7" />
+      </View>
+    );
   return (
     // Required ancestor for the swipe gestures used by the transaction rows.
     <GestureHandlerRootView style={{ flex: 1 }}>
