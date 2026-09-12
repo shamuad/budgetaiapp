@@ -201,7 +201,41 @@ try {
   assertNoError(newPasswordAttempt.error, 'sign in with replacement password');
   assert.equal(newPasswordAttempt.data.user?.id, userA.user.id);
 
-  console.log('Auth integration passed: recovery, password replacement, switching and RLS isolation.');
+  const magicClient = client();
+  const magicRequest = await magicClient.auth.signInWithOtp({
+    email: userAEmail,
+    options: { shouldCreateUser: false, emailRedirectTo: 'budgetai://auth-callback?intent=magiclink' },
+  });
+  assertNoError(magicRequest.error, 'request a Magic Link for an existing account');
+  const magicLink = await admin.auth.admin.generateLink({ type: 'magiclink', email: userAEmail });
+  assertNoError(magicLink.error, 'generate local Magic Link');
+  const magicToken = magicLink.data.properties.hashed_token;
+  const magicSession = await magicClient.auth.verifyOtp({ token_hash: magicToken, type: 'magiclink' });
+  assertNoError(magicSession.error, 'consume Magic Link');
+  assert.equal(magicSession.data.user.id, userA.user.id);
+  const reusedMagic = await client().auth.verifyOtp({ token_hash: magicToken, type: 'magiclink' });
+  assert.ok(reusedMagic.error, 'A Magic Link must not be reusable');
+  await magicClient.auth.signOut();
+
+  const confirmation = await admin.auth.admin.generateLink({
+    type: 'signup', email: `auth-confirm-${runId}@example.com`, password: originalPassword,
+    options: { redirectTo: 'budgetai://auth-callback?intent=signup' },
+  });
+  assertNoError(confirmation.error, 'generate signup confirmation without name metadata');
+  createdUserIds.push(confirmation.data.user.id);
+  const confirmedClient = client();
+  const confirmed = await confirmedClient.auth.verifyOtp({
+    token_hash: confirmation.data.properties.hashed_token, type: 'signup',
+  });
+  assertNoError(confirmed.error, 'consume signup confirmation');
+  assert.equal(confirmed.data.user.id, confirmation.data.user.id);
+  const { count: confirmedCategories, error: confirmedCategoryError } = await confirmedClient
+    .from('categories').select('id', { count: 'exact', head: true });
+  assertNoError(confirmedCategoryError, 'read categories created for signup without name');
+  assert.equal(confirmedCategories, 30);
+  await confirmedClient.auth.signOut();
+
+  console.log('Auth integration passed: confirmation, one-use Magic Link, recovery, switching and RLS isolation.');
 } finally {
   for (const userId of createdUserIds) {
     const { error } = await admin.auth.admin.deleteUser(userId);

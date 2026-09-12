@@ -2,14 +2,13 @@ import { useAuthStore } from '@budgetaiapp/shared';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 
-import { useAppTheme } from '../../src/theming';
+import { authColors } from '../../src/components/auth/AuthUI';
 
 export const unstable_settings = {
-  initialRouteName: 'login',
+  initialRouteName: 'welcome',
 };
 
 export default function AuthLayout() {
-  const { colors } = useAppTheme();
   const router = useRouter();
   const isPasswordRecovery = useAuthStore((state) => state.isPasswordRecovery);
 
@@ -27,9 +26,13 @@ export default function AuthLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}>
+        contentStyle: { backgroundColor: authColors.paper },
+      }}
+    >
+      <Stack.Screen name="welcome" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="magic-link" />
+      <Stack.Screen name="verify-email" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="update-password" />
